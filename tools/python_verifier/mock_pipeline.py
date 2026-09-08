@@ -69,7 +69,9 @@ def new_case():
         },
         "enhancement": {"appliedOps": [], "paramsPerOp": {}, "improved": False, "recheckClass": ""},
         "evidence": {"vesselMask": None, "opticDisc": None, "fovea": None,
-                     "lesions": empty_lesions(), "confidence": ""},
+                     "lesions": empty_lesions(), "confidence": "",
+                     "opticDiscDetail": {"center": None, "bbox": None, "confidence": 0.0,
+                                         "status": "not_detected", "method": "", "note": ""}},
         "grading": {"rawProbs": [float("nan")] * 5, "grade": float("nan"),
                     "referableProb": float("nan"), "referable": False, "modelFile": ""},
         "explain": {"gradCam": None, "attentionImage": None, "evidenceOverlay": None, "note": ""},
@@ -163,9 +165,13 @@ class QualityGate:
 # Advisory analysis (honest empty in Sprint 0)
 # ---------------------------------------------------------------------------
 def analyze_retina(img):
-    return {"vesselMask": [[False] * len(img) for _ in range(len(img))],
+    n = len(img)
+    return {"vesselMask": [[False] * n for _ in range(n)],
             "opticDisc": None, "fovea": None, "lesions": empty_lesions(),
-            "confidence": "low"}
+            "confidence": "low",
+            "opticDiscDetail": {"center": None, "bbox": None, "confidence": 0.0,
+                                "status": "not_detected", "method": "morphology_bright_temporal",
+                                "note": "Optic disc localization is advisory evidence only; not a diagnosis."}}
 
 
 # ---------------------------------------------------------------------------

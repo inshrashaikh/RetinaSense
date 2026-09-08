@@ -85,7 +85,7 @@ function c = runPipeline(varargin)
 
         % ---------- Stage 5: Retinal/Lesion analysis (ADVISORY, non-blocking) ----------
         try
-            c.evidence = analyzeRetina(c.image, [], struct());
+            c.evidence = analyzeRetina(c.image, [], cfg.analysis);
             c = addStage(c, 'analysis');
         catch ME
             % Advisory: never blocks grading. Log and continue with no evidence.
@@ -98,7 +98,9 @@ function c = runPipeline(varargin)
                                   'hemorrhages',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0)), ...
                                   'microaneurysms',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0)), ...
                                   'neoVasc',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0))), ...
-                'confidence', 'low');
+                'confidence', 'low', ...
+                'opticDiscDetail', struct('center', [], 'bbox', [], 'confidence', 0, ...
+                    'status', 'not_detected', 'method', '', 'note', 'Analysis module failed'));
         end
 
         % ---------- Stage 6: DR grading ----------

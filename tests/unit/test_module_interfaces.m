@@ -80,8 +80,15 @@ function test_analyzeRetinaAdvisoryContract(testCase)
     verifyTrue(testCase, isfield(ev, 'opticDisc'));
     verifyTrue(testCase, isfield(ev, 'fovea'));
     verifyTrue(testCase, isfield(ev, 'lesions'));
+    verifyTrue(testCase, isfield(ev, 'confidence'));
+    verifyTrue(testCase, isfield(ev, 'opticDiscDetail'));
     verifyTrue(testCase, ismember(ev.confidence, {'low','medium','high'}));
     verifyEqual(testCase, size(ev.vesselMask), size(img(:,:,1)));
+    % opticDiscDetail contract
+    verifyTrue(testCase, isstruct(ev.opticDiscDetail));
+    verifyTrue(testCase, isfield(ev.opticDiscDetail, 'center'));
+    verifyTrue(testCase, isfield(ev.opticDiscDetail, 'status'));
+    verifyTrue(testCase, ismember(ev.opticDiscDetail.status, {'detected','low_confidence','not_detected'}));
 end
 
 function test_classifyImageContract(testCase)

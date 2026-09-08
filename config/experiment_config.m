@@ -26,6 +26,9 @@ function cfg = experiment_config()
     % ---- Classification / DR grading ----
     cfg.classification = classification_config();
 
+    % ---- Retinal Analysis (advisory, Stage 5) ----
+    cfg.analysis = analysis_config();
+
     % ---- Explainability ----
     cfg.explainability = struct( ...
         'layers',      '', ...   % e.g. 'activation_40_relu' (set post-benchmark)

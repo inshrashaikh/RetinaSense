@@ -6,7 +6,7 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
 %   CONTRACT (docs/ARCHITECTURE.md §4.5):
 %     explain.gradCam         HxWx1 double normalized attention heatmap
 %     explain.attentionImage  HxWx3 uint8 overlay of attention on image
-%     explain.evidenceOverlay HxWx3 uint8 lesion candidates overlay (independent)
+%     explain.evidenceOverlay HxWx3 uint8 lesion candidates + optic disc overlay (independent)
 %     explain.note            string: model attention, NOT proof of causality
 %
 %   Attention (Grad-CAM) and lesion evidence must never be conflated
@@ -33,16 +33,30 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
         attentionImage = im2uint8(zeros(h, w, 3));
     end
 
-    % Evidence overlay (independent of attention): maps lesions onto image.
+    % Evidence overlay (independent of attention): maps lesions + optic disc onto image.
     evidenceOverlay = im2uint8(zeros(h, w, 3));
-    if isfield(evidence, 'lesions')
+    if isfield(evidence, 'lesions') || isfield(evidence, 'opticDiscDetail')
         im = im2uint8(rgb2gray(image));  % start from working image
         evidenceOverlay = repmat(im, [1 1 3]);
-        classes = fieldnames(evidence.lesions);
-        for i = 1:numel(classes)
-            les = evidence.lesions.(classes{i});
-            if isstruct(les) && ~isempty(les.map) && any(les.map(:))
-                % TODO(Sprint 7): color-code candidates; once real detections exist.
+        
+        % Lesion candidates
+        if isfield(evidence, 'lesions')
+            classes = fieldnames(evidence.lesions);
+            for i = 1:numel(classes)
+                les = evidence.lesions.(classes{i});
+                if isstruct(les) && ~isempty(les.map) && any(les.map(:))
+                    % TODO(Sprint 7): color-code candidates; once real detections exist.
+                end
+            end
+        end
+        
+        % Optic disc overlay
+        if isfield(evidence, 'opticDiscDetail') && isstruct(evidence.opticDiscDetail)
+            try
+                evidenceOverlay = overlayOpticDisc(evidenceOverlay, evidence.opticDiscDetail, ...
+                    struct('showCenter', true, 'showBBox', true, 'showConfidence', true));
+            catch
+                % Overlay failed silently; keep base evidence overlay
             end
         end
     end

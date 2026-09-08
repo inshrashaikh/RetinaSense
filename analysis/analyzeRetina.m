@@ -8,12 +8,12 @@ function evidence = analyzeRetina(image, fovMask, params)
 %   or the final referral (except via evidence overlays in the report).
 
     if nargin < 2; fovMask = []; end
-    if nargin < 3; params = struct(); end
+    if nargin < 3 || isempty(params); params = analysis_config(); end
 
-    vesselMask = segmentVessels(image, params);
-    opticDisc  = locateOpticDisc(image, params);
-    fovea      = locateFovea(image, params);
-    lesions    = detectLesions(image, params);
+    vesselMask = segmentVessels(image, params.vessels);
+    opticDisc  = locateOpticDisc(image, params.opticDisc);
+    fovea      = locateFovea(image, opticDisc, params.fovea);
+    lesions    = detectLesions(image, params.lesions);
 
     evidence = buildEvidence(vesselMask, opticDisc, fovea, lesions);
 end
