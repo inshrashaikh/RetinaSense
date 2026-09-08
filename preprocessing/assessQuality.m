@@ -1,0 +1,103 @@
+function quality = assessQuality(working, params)
+%ASSESSQUALITY  Stage 1: image quality assessment (IQA) - the entry gate.
+%
+%   quality = assessQuality(working, params)
+%
+%   working: HxWx3 uint8 working RGB image
+%   params:  its threshold group (cfg.quality -> quality_thresholds(); may be
+%            passed as '' to auto-load)
+%
+%   CONTRACT (docs/ARCHITECTURE.md §4.1):
+%     quality.score          double 0..1 (weighted composite)
+%     quality.class          'good' | 'borderline' | 'ungradable'
+%     quality.metrics        focus, illumination, fovCoverage, artifacts (0..1)
+%     quality.failureReasons cellstr, e.g. {'focus','illumination'}
+%     quality.recapture      struct reasonCode+instruction (set if ungradable)
+%
+%   This is the differentiator module (docs/ARCHITECTURE.md §3.1): classical
+%   CV metrics, deterministic + explainable (no DL). The per-metric math here
+%   is genuine plumbing; tuning the thresholds/weights against a small
+%   human-rated subset is TODO(Sprint 1). This keeps the gate honest, not fake.
+
+    if nargin < 2 || isempty(params); params = quality_thresholds(); end
+
+    gray = rgb2gray(im2double(working));
+
+    % ---- Metric 1: focus (variance of Laplacian, green channel) ----
+    % Higher laplacian variance => sharper. Normalized to 0..1 heuristically.
+    lap = conv2(gray, [0 1 0; 1 -4 1; 0 1 0], 'same');
+    focus = min(1, var(lap(:)) / 0.02);
+
+    % ---- Metric 2: illumination (luminance mean + saturation guard) ----
+    lumMean = mean(gray(:));
+    illum = max(0, min(1, 1 - abs(lumMean - 0.5) / 0.5));  % 0.5 luminance = ideal
+
+    % ---- Metric 3: FOV coverage (non-dark fraction) ----
+    fovCoverage = mean(gray(:) > 0.06);   % fraction of pixels = fundus, not void
+
+    % ---- Metric 4: artifacts (clip / saturation / glare fraction) ----
+    satFrac = mean(gray(:) > 0.985);
+    darkFrac = mean(gray(:) < 0.01);
+    artifacts = max(0, 1 - (satFrac + darkFrac));
+
+    metrics = struct('focus', focus, 'illumination', illum, ...
+                     'fovCoverage', fovCoverage, 'artifacts', artifacts);
+
+    % ---- Rule-based classification against config thresholds ----
+    [score, klass, failures] = classify(params, metrics);
+    quality = struct( ...
+        'score',          score, ...
+        'class',          klass, ...
+        'metrics',        metrics, ...
+        'failureReasons', failures, ...
+        'recapture',      struct('reasonCode', '', 'instruction', ''));
+
+    if strcmp(klass, 'ungradable')
+        % Delegate recapture guidance to recaptureFeedback (shared with Stage 2).
+        r = recaptureFeedback(failures);
+        quality.recapture = r;
+    end
+
+    % TODO(Sprint 1): calibrate thresholds/weights against a small human-rated
+    % quality subset; add reported false-rejection rate (docs/ARCHITECTURE.md §2
+    % Stage 1 metric).
+end
+
+function [score, klass, failures] = classify(params, metrics)
+    names = fieldnames(metrics);
+    lowFail = {};
+    midFail = {};
+    for i = 1:numel(names)
+        m = names{i};
+        low = thresholdFor(params.metricLow, m);
+        mid = thresholdFor(params.metricMid, m);
+        if metrics.(m) < low
+            lowFail{end+1} = m; %#ok<AGROW>  (bounded 4-element list)
+        elseif metrics.(m) < mid
+            midFail{end+1} = m; %#ok<AGROW>
+        end
+    end
+
+    score = params.weights.focus * metrics.focus + ...
+            params.weights.illumination * metrics.illumination + ...
+            params.weights.fovCoverage * metrics.fovCoverage + ...
+            params.weights.artifacts * metrics.artifacts;
+
+    if ~isempty(lowFail)
+        klass    = 'ungradable';
+        failures = lowFail;             % drives recaptureFeedback (Stage 2)
+    elseif ~isempty(midFail) || score < params.goodScore
+        klass    = 'borderline';
+        failures = midFail;
+    else
+        klass    = 'good';
+        failures = {};
+    end
+end
+
+function t = thresholdFor(table, key)
+    t = 0;
+    for i = 1:size(table, 1)
+        if strcmp(table{i, 1}, key); t = table{i, 2}; return; end
+    end
+end

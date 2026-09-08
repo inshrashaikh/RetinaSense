@@ -1,0 +1,26 @@
+# Biomedical datasets and derived tensors (licensing: APTOS, IDRiD, DRIVE,
+# Messidor-2 require access agreements) - never commit.
+data/raw/
+data/processed/
+
+# Trained model weights and fitted calibration artifacts.
+data/models/
+
+# Generated outputs (reports, logs, plots, metrics).
+output/
+
+# Python verifier cruft.
+__pycache__/
+*.pyc
+tools/python_verifier/output/
+
+# Demo image assets may be large (keep the small committed synthetic demo).
+assets/*.jpg
+assets/*.png
+!assets/synthetic_fundus_demo.png
+
+# MATLAB/OS cruft.
+*.asv
+*.mlappinstall
+Thumbs.db
+.DS_Store

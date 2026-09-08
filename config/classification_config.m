@@ -1,0 +1,36 @@
+function c = classification_config()
+%CLASSIFICATION_CONFIG  DR grading configuration (config/classification_config.m).
+%
+%   c = classification_config()
+%
+%   Referable DR threshold, classes, and classifier training/eval settings.
+%   References: docs/ARCHITECTURE.md §2 Stage 6, §8, §3.2.
+%
+%   The backbone is benchmark-driven and recorded by scripts/benchmark_backbones.m
+%   into config/experiment_config.m -> cfg.model. It is not pinned here.
+
+    c = struct();
+
+    c.classes      = {'grade0','grade1','grade2','grade3','grade4'}; % ICDR 0-4
+    c.numClasses   = 5;
+
+    % Referable DR = ICDR grade >= 2 (per docs/ARCHITECTURE.md §2 Stage 6).
+    c.referThreshold = 2;
+    c.referIndex     = c.referThreshold + 1;   % 1-based into rawProbs
+
+    % Training/research settings (used from Sprint 2 onward).
+    c.train = struct( ...
+        'backboneCandidates', {{'resnet50','efficientnetb0'}}, ...
+        'imagenetPretrained', true, ...
+        'miniBatchSize',      16, ...
+        'maxEpochs',          15, ...
+        'initialLearnRate',   1e-4, ...
+        'validationSplit',    0.15, ...
+        'augmentation',       true, ...   % flip/rotate/scale/color-jitter, fixed seed
+        'classWeights',       'inverseFrequency', ... % '' | 'inverseFrequency' | 'focal'
+        'focalGamma',         2.0);
+
+    c.classify = struct( ...
+        'inputSize',    [224 224 3], ...
+        'keepOriginal', true);   % keep working image; normalize only for infer
+end
