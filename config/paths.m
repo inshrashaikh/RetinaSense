@@ -19,9 +19,9 @@ function cfg = paths()
     cfg.config = fullfile(root, 'config');
     cfg.data   = struct(...
         'root',      fullfile(root, 'data'), ...
-        'raw',       fullfile(root, 'data', 'raw'),       % gitignored (APTOS, IDRiD, DRIVE, Messidor-2)
-        'processed', fullfile(root, 'data', 'processed'), % gitignored
-        'manifests', fullfile(root, 'data', 'manifests'), % committed
+        'raw',       fullfile(root, 'data', 'raw'), ...   % gitignored (APTOS, IDRiD, DRIVE, Messidor-2)
+        'processed', fullfile(root, 'data', 'processed'), ... % gitignored
+        'manifests', fullfile(root, 'data', 'manifests'), ... % committed
         'models',    fullfile(root, 'data', 'models'));   % gitignored .mat
     cfg.output = fullfile(root, 'output');                % reports, plots, metrics
     cfg.assets = fullfile(root, 'assets');                % demo images (gitignored if large)

@@ -1,50 +1,63 @@
 function explain = computeGradCAM(image, net, grading, evidence, params)
-%COMPUTEGRADCAM  Stage 7: Grad-CAM attention map + evidence overlay.
+%COMPUTEGRADCAM  Stage 7: Grad-CAM attention map + lesion evidence overlay.
 %
 %   explain = computeGradCAM(image, net, grading, evidence, params)
 %
 %   CONTRACT (docs/ARCHITECTURE.md §4.5):
 %     explain.gradCam         HxWx1 double normalized attention heatmap
-%     explain.attentionImage  HxWx3 uint8 overlay of attention on image
+%     explain.attentionImage  HxWx3 uint8 overlay of attention on the image
 %     explain.evidenceOverlay HxWx3 uint8 lesion candidates overlay (independent)
 %     explain.note            string: model attention, NOT proof of causality
 %
-%   Attention (Grad-CAM) and lesion evidence must never be conflated
-%   (docs/ARCHITECTURE.md §3.6). Grad-CAM is Deep Learning Toolbox work.
+%   Real Grad-CAM path: with a trained net (SeriesNetwork/DAGNetwork/dlnetwork)
+%   and a valid target layer (cfg.explainability.layers), computes the Grad-CAM
+%   score map on the referable class via Deep Learning Toolbox gradCAM(). The
+%   heatmap is resized to the working image and normalized 0..1.
 %
-%   TODO(Sprint 4+): gradCAM() on the trained net + imfuse colormap overlays.
-%   Sprint 0 requires a trained net; without one it returns a neutral-black
-%   heatmap and honest note — never fake attention.
+%   Honest fallback (docs/ARCHITECTURE.md §9): if no net is supplied, or the
+%   target layer is missing/invalid, or the toolbox call fails, this returns a
+%   zero heatmap and a note — it NEVER fabricates attention.
+%
+%   Attention (Grad-CAM) and lesion evidence are kept separate and NEVER
+%   conflated (§3.6). Grad-CAM is model attention, not causality.
 
     if nargin < 4; evidence = struct('lesions', struct()); end
     if nargin < 5; params = experiment_config().explainability; end
 
     note = params.note;   % 'Model attention - not proof of causality'
-
     [h, w, ~] = size(image);
 
-    if isempty(net)
-        gradCam = zeros(h, w, 'double');          % honest: no attention computed
-        attentionImage = repmat(uint8(0), h, w);  % black overlay
-        attentionImage = cat(3, attentionImage, attentionImage, attentionImage);
-    else
-        % TODO(Sprint 4+): real gradCAM(net, image, 'Layer', params.layers).
-        gradCam = zeros(h, w, 'double');
-        attentionImage = im2uint8(zeros(h, w, 3));
+    % ---- Grad-CAM (real path with trained net) ----
+    gradCam = zeros(h, w, 'double');
+    if ~isempty(net)
+        try
+            scoreMap = runGradCAM(net, image, grading, params);
+            if ~isempty(scoreMap)
+                gradCam = imresize(scoreMap, [h w]);
+                gradCam = (gradCam - min(gradCam(:))) / ...
+                    max(eps, max(gradCam(:)) - min(gradCam(:)));
+            end
+        catch
+            % Invalid layer / unsupported network: honest zero heatmap, note why.
+            note = [note ' (Grad-CAM layer unavailable for this model; ' ...
+                        'attention left empty rather than fabricating.)'];
+        end
     end
 
-    % Evidence overlay (independent of attention): maps lesions onto image.
-    evidenceOverlay = im2uint8(zeros(h, w, 3));
-    if isfield(evidence, 'lesions')
-        im = im2uint8(rgb2gray(image));  % start from working image
-        evidenceOverlay = repmat(im, [1 1 3]);
-        classes = fieldnames(evidence.lesions);
-        for i = 1:numel(classes)
-            les = evidence.lesions.(classes{i});
-            if isstruct(les) && ~isempty(les.map) && any(les.map(:))
-                % TODO(Sprint 7): color-code candidates; once real detections exist.
-            end
-        end
+    attentionImage = im2uint8(zeros(h, w, 3));
+    if any(gradCam(:) > 0)
+        % Overlay jet heatmap on the grayscale working image (§7 colormap).
+        base = repmat(im2uint8(rgb2gray(image)), [1 1 3]);
+        cm = feval(params.colormap, 256);                 % jet(256), parula(256), ...
+        camIdx = round(gradCam * (size(cm, 1) - 1)) + 1;  % 0..1 -> row
+        heat = ind2rgb(camIdx, cm);
+        attentionImage = im2uint8(0.55 * im2double(base) + 0.45 * heat);
+    end
+
+    % ---- Evidence overlay (independent of attention) ----
+    evidenceOverlay = repmat(im2uint8(rgb2gray(image)), [1 1 3]);
+    if isfield(evidence, 'lesions') && ~isempty(evidence.lesions)
+        evidenceOverlay = overlayLesions(evidenceOverlay, evidence.lesions);
     end
 
     explain = struct( ...
@@ -52,4 +65,70 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
         'attentionImage',  attentionImage, ...
         'evidenceOverlay', evidenceOverlay, ...
         'note',            note);
+end
+
+function scoreMap = runGradCAM(net, image, grading, params)
+%RUNGRADCAM  Invoke Deep Learning Toolbox gradCAM on the referable class.
+    if isa(net, 'nnet.cnn.LayerGraph'); return; end            % not a trainable net
+    if isa(net, 'DAGNetwork') || isa(net, 'SeriesNetwork')
+        net = dlnetwork(net);
+    elseif ~isa(net, 'dlnetwork')
+        return;                                                % unsupported type
+    end
+
+    im = dlarray(single(imresize(image, [224 224])), 'SSCB');
+
+    % Class index to explain: the graded class (referable decision class).
+    label = grading.grade + 1;
+    if ~isempty(params.layers) && isLayerValid(net, params.layers)
+        scoreMap = gradCAM(net, im, label, 'Layer', params.layers);
+    else
+        scoreMap = gradCAM(net, im, label);
+    end
+    scoreMap = extractdata(scoreMap);
+end
+
+function tf = isLayerValid(net, layerName)
+%ISLAYERVALID  Best-effort check that layerName exists in the network. Failure
+% returns false (-> Grad-CAM falls back to the default/no-layer path); the
+% caller's try/catch keeps the module total even if the introspection errors.
+    tf = false;
+    try
+        names = {};
+        if isa(net, 'dlnetwork')
+            L = net.Layers;
+            if isa(L, 'nnet.cnn.layer.Layer') || isa(L, 'Layer')
+                names = {L.Name};
+            elseif isa(L, 'nnet.cnn.LayerGraph') || (isobject(L) && isprop(L, 'Name'))
+                names = {L.Layers.Name};
+            end
+        elseif isprop(net, 'Layers')
+            names = {net.Layers.Name};
+        end
+        tf = any(strcmp(layerName, names));
+    catch
+        tf = false;   % unknown introspect path: report layer as not found
+    end
+end
+
+function ov = overlayLesions(base, lesions)
+%OVERLAYLESIONS  Color-code candidate lesion maps onto the base overlay.
+% Each lesion class draws in its own colour (advisory evidence only).
+    colors = struct('exudates', [1 0.84 0], 'hemorrhages', [1 0 0], ...
+                    'microaneurysms', [0 0.6 1], 'neoVasc', [0.6 0 1]);
+    classes = fieldnames(lesions);
+    for i = 1:numel(classes)
+        les = lesions.(classes{i});
+        if ~isstruct(les) || isempty(les.map) || ~any(les.map(:))
+            continue;
+        end
+        if ~isfield(colors, classes{i}); continue; end
+        m = imresize(les.map, [size(base,1) size(base,2)]);
+        m = imdilate(m > 0, strel('disk', 2));   % visible on overlay
+        c = colors.(classes{i});
+        for ch = 1:3
+            chMap = base(:, :, ch); chMap(m) = floor(c(ch) * 255); base(:, :, ch) = chMap;
+        end
+    end
+    ov = im2uint8(base);
 end

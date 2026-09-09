@@ -35,11 +35,15 @@ function c = ingestImage(meta, imagePath)
             raiseError('ingestImage', 'FileNotFound', ...
                 'Image not found: %s', imagePath);
         end
+        [~, ~, ext] = fileparts(imagePath);
+        if ~any(strcmpi(ext, p.inputFormats))
+            raiseError('ingestImage', 'UnsupportedFormat', ...
+                'Unsupported image format ''%s''. Allowed: %s.', ext, ...
+                strjoin(p.inputFormats, ', '));
+        end
         try
-            % TODO(Sprint 2+): replace with imread() when real data is used.
-            % For Sprint 0 the file path branch is exercised by tests pointing
-            % at a committed synthetic asset.
-            c.image = imreadSafe(imagePath);
+            % Validate the file really decodes as an image (JPG/PNG).
+            c.image = imread(imagePath);
         catch
             raiseError('ingestImage', 'DecodeFailed', ...
                 'Could not decode image: %s', imagePath);
@@ -71,13 +75,6 @@ function img = makeSyntheticImage(maxEdge)
     g = uint8(bg + 60*disc);
     b = uint8(bg + 20*disc);
     img = cat(3, r, g, b);
-end
-
-function img = imreadSafe(file)
-%IMREADSAFE  TODO(Sprint 2+): use imread. Sprint 0 fallback reads a PGM-less
-% stand-in so tests can point at any committed PNG asset. For real data,
-% replace body with: img = imread(file);
-    img = imread(file);
 end
 
 function im = downscaleToMax(im, maxEdge)

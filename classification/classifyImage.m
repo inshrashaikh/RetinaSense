@@ -7,17 +7,17 @@ function grading = classifyImage(image, net, params)
 %     grading.rawProbs     1x5 double, P(grade 0..4), sums to 1
 %     grading.grade        0..4 (argmax)
 %     grading.referableProb P(grade >= 2)
-%     grading.referable    referableProb >= cfg.referThreshold-based threshold
+%     grading.referable    referableProb >= referThreshold (config)
+%     grading.modelFile    name of the trained net used ('' if mock)
 %
-%   With a real trained net, net = the chosen backbone network and params = the
-%   classification config. WITHOUT a trained model (Sprint 0), net may be empty:
-%   the mock branch produces DETERMINISTIC PSEUDO-PROBABILITIES derived from
-%   image content — clearly synthetic, seeded, and flagged model.available=false.
-%   It exists ONLY to let the pipeline run end-to-end. It is NOT a trained model
-%   and must never be presented as clinical output.
+%   REAL path: when a trained network (from trainClassifier /
+%   benchmark_backbones) is supplied, the image is resized to the net input,
+%   normalized, and softmax probabilities come from predict().
 %
-%   TODO(Sprint 2+): trainClassifier + benchmark_backbones select the real CNN;
-%   replace the mock branch with predict() on the trained net.
+%   MOCK path: if net is empty (no trained model), a deterministic pseudo-
+%   probability is produced from image content — clearly synthetic and flagged
+%   modelFile=''. It exists ONLY so the pipeline can run end-to-end before a
+%   model exists; it is never presented as clinical output (AGENTS.md no-fake-AI).
 
     cfg = experiment_config();
     if nargin < 3 || isempty(params); params = cfg.classification; end
@@ -25,31 +25,56 @@ function grading = classifyImage(image, net, params)
     if isempty(net)
         grading = mockGrading(image, cfg);
     else
-        % Real inference path — implement in Sprint 2+:
-        %   im  = preprocess for net.Layers(1).InputSize
-        %   prob = predict(net, im); ...
-        grading = mockGrading(image, cfg);   % placeholder until model exists
-        grading.modelFile = '(real net supplied but inference TODO)';
+        grading = realGrading(image, net, cfg);
     end
 end
 
+function grading = realGrading(image, net, cfg)
+%REALGRADING  Predict 5-class softmax via the trained CNN.
+    if ~isempty(net)
+        % Ensure a usable imageDatastore-free array for predict.
+        im = imresize(image, cfg.classification.classify.inputSize(1:2));
+        im = single(im) / 255;
+        im = reshape(im, [size(im,1) size(im,2) size(im,3) 1]);   % add batch dim
+        score = predict(net, im);                 % 1x5 softmax
+        rawProbs = double(score(1, :));
+    else
+        rawProbs = NaN(1, 5);
+    end
+
+    rawProbs = rawProbs / sum(rawProbs);         % guard: normalise to sum 1
+    grade = find(rawProbs == max(rawProbs), 1) - 1;
+    refIdx = cfg.classification.referIndex;      % grade>=2 -> idx 3..5
+    referableProb = sum(rawProbs(refIdx:end));
+    referable = grade >= cfg.referThreshold;     % decision on hard grade (Level 2+)
+
+    grading = struct( ...
+        'rawProbs',      rawProbs, ...
+        'grade',         grade, ...
+        'referableProb', referableProb, ...
+        'referable',     referable, ...
+        'modelFile',     getNetName(net));
+end
+
+function name = getNetName(net)
+    if isa(net, 'nnet.cnn.LayerGraph'); name = 'layerGraph'; return; end
+    if isprop(net, 'Name') && ~isempty(net.Name); name = net.Name; return; end
+    name = '(untitled network)';
+end
+
 function grading = mockGrading(image, cfg)
+%MOCKGRADING  Deterministic pseudo-signal stand-in (no trained model). The
+% mock is explicit: it is not a model and must not be cited as clinical output.
     m = cfg.mock;
     rng(m.seed, 'twister');
 
-    % Deterministic pseudo-signal: mean green channel luminance -> "disease-ness".
     g = mean(image(:, :, 2), 'all') / 255;
-
-    % Weight probs toward higher grades for brighter (mock) images; keep sane.
     base = [3.0, 0.8*exp(2*g), 0.5*exp(3*g), 0.3*exp(3.5*g), 0.2*exp(4*g)];
     rawProbs = base / sum(base);
 
-    grade = find(rawProbs == max(rawProbs), 1) - 1;       % 0..4 (argmax)
-    refIdx = cfg.classification.referIndex;               % grade>=2 -> idx 3..5
+    grade = find(rawProbs == max(rawProbs), 1) - 1;
+    refIdx = cfg.classification.referIndex;
     referableProb = sum(rawProbs(refIdx:end));
-
-    % Referable-DR threshold is LEVEL 2+ (docs/ARCHITECTURE.md §2 Stage 6).
-    % Decision driven by the hard grade threshold; prob reported as evidence.
     referable = grade >= cfg.referThreshold;
 
     grading = struct( ...
@@ -57,5 +82,5 @@ function grading = mockGrading(image, cfg)
         'grade',         grade, ...
         'referableProb', referableProb, ...
         'referable',     referable, ...
-        'modelFile',     '');   % no trained model in mock
+        'modelFile',     '');
 end

@@ -45,12 +45,16 @@ function quality = assessQuality(working, params)
 
     % ---- Rule-based classification against config thresholds ----
     [score, klass, failures] = classify(params, metrics);
-    quality = struct( ...
-        'score',          score, ...
-        'class',          klass, ...
-        'metrics',        metrics, ...
-        'failureReasons', failures, ...
-        'recapture',      struct('reasonCode', '', 'instruction', ''));
+    % NOTE: built field-by-field, NOT via struct(...) with the `failures` cell
+    % value. struct() treats a cell array as a per-element value list, so a
+    % non-scalar/empty cell would widen `quality` into a struct array (e.g. 0x0
+    % for a 'good' image) and break the scalar 1x1 contract (ARCHITECTURE m4.1).
+    quality = struct();
+    quality.score          = score;
+    quality.class          = klass;
+    quality.metrics        = metrics;
+    quality.failureReasons = failures;
+    quality.recapture      = struct('reasonCode', '', 'instruction', '');
 
     if strcmp(klass, 'ungradable')
         % Delegate recapture guidance to recaptureFeedback (shared with Stage 2).
@@ -87,8 +91,17 @@ function [score, klass, failures] = classify(params, metrics)
         klass    = 'ungradable';
         failures = lowFail;             % drives recaptureFeedback (Stage 2)
     elseif ~isempty(midFail) || score < params.goodScore
-        klass    = 'borderline';
-        failures = midFail;
+        % Borderline: report which metric(s) fell short. If no individual
+        % metric breached the borderline band but the composite score is low,
+        % flag it explicitly so failureReasons is never silently empty while
+        % the image is not 'good' (contract: "why not good; empty if good").
+        if isempty(midFail)
+            klass    = 'borderline';
+            failures = {'composite'};
+        else
+            klass    = 'borderline';
+            failures = midFail;
+        end
     else
         klass    = 'good';
         failures = {};

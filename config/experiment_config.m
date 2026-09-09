@@ -26,6 +26,15 @@ function cfg = experiment_config()
     % ---- Classification / DR grading ----
     cfg.classification = classification_config();
 
+    % ---- Benchmark targets for backbone selection (SIH PS 26038) ----
+    % These are TARGETS used only for DECISION RULES in
+    % scripts/benchmark_backbones.m. They are never reported as achieved
+    % metrics; the harness records whether they were actually met.
+    cfg.benchmark = struct( ...
+        'se', 0.90, ...    % referable sensitivity target
+        'sp', 0.85, ...    % referable specificity target
+        'tieBreak', 'size');   % 'size' | 'latency' among target-meeting backbones
+
     % ---- Explainability ----
     cfg.explainability = struct( ...
         'layers',      '', ...   % e.g. 'activation_40_relu' (set post-benchmark)
@@ -59,4 +68,24 @@ function cfg = experiment_config()
         'backbone',  '', ...       % 'resnet50' | 'efficientnetb0' | '' (unset)
         'metrics',   struct(), ... % benchmark four-axis table (SE,SP,AUROC,latency,size)
         'available', false);       % true only after training + artifacts exist
+
+    cfg.model = loadModelRecord(cfg.model);   % reads data/models/backbone_benchmark.json
+end
+
+function model = loadModelRecord(model)
+%LOADMODELRECORD  If a benchmark run has been recorded (scripts/
+% benchmark_backbones.m -> data/models/backbone_benchmark.json), surface the
+% chosen backbone + metrics into cfg.model. This is the single place a
+% benchmark decision becomes visible to the rest of the pipeline.
+    recFile = fullfile(paths().data.models, 'backbone_benchmark.json');
+    if ~exist(recFile, 'file'); return; end        % no benchmark yet (mock)
+    try
+        rec = jsondecode(fileread(recFile));
+        model.backbone  = rec.chosenBackbone;
+        model.metrics   = rec.perBackbone;
+        model.available = rec.targetsMet;          % clinically acceptable => usable
+    catch
+        % A corrupt/partial record must not break pipeline startup; leave the
+        % model unavailable so callers behave as if untrained.
+    end
 end

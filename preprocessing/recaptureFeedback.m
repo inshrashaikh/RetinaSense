@@ -42,6 +42,14 @@ function rec = recaptureFeedback(failureReasons)
     end
     if isempty(key); key = failureReasons{1}; end
 
+    % Safety fallback for any reason code not in the guide table (should not
+    % happen in practice; keeps the module total even on unexpected input).
+    if ~isfield(guide, key)
+        rec = struct('reasonCode', 'RETAKE', ...
+            'instruction', 'Image did not pass the quality gate. Please retake the fundus photo.');
+        return;
+    end
+
     g = guide.(key);
     rec = struct('reasonCode', g.code, 'instruction', g.instruction);
 end

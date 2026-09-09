@@ -155,16 +155,22 @@ end
 function c = applyScenario(c, opts, cfg)
     % Force a mock outcome for demos/tests. Mutates the working image only.
     % This is test/demo tooling; never reachable in a real deployment path.
-    % Underexposure is modeled as a brightness offset (laplacian variance -
-    % hence focus - is shift-invariant, so only the illumination metric drops).
+    % Brightness arithmetic is done in 0..1 BEFORE im2uint8: passing a 0..255
+    % double straight to im2uint8() re-normalizes it (values >1 clip to 255),
+    % which whitens the frame instead of darkening it.
+    %
+    % 'borderline' under-exposes (illumination into the mid band -> borderline
+    % gate, exercising the enhancement branch); 'ungradable' forces a near-
+    % black frame; 'good' keeps the strongest-fidelity frame.
     if isempty(opts.scenario); return; end
+    imd = double(c.image) / 255;
     switch opts.scenario
         case 'ungradable'
-            c.image = im2uint8(double(c.image) * 0.02 + 10);   % near-black: fail illum/FOV/focus
+            c.image = im2uint8(max(0, imd * 0.04));   % near-black: fail illum/FOV/focus
         case 'borderline'
-            c.image = im2uint8(max(0, double(c.image) - 60));  % under-exposed: fail illumination
+            c.image = im2uint8(max(0, imd - 0.18));   % under-exposed: illum into the mid band -> borderline gate
         case 'good'
-            c.image = im2uint8(c.image);                       % as-is (mock scores high)
+            % unchanged (see note above)
     end
 end
 

@@ -25,10 +25,13 @@ end
 
 function test_borderlineRunsEnhancementThenProceeds(testCase)
     c = runPipeline('scenario', 'borderline');
-    verifyTrue(testCase, ismember(c.quality.class, {'borderline'}));
+    % The borderline branch is taken. On success c.quality is REPLACED by the
+    % post-enhancement recheck ('good') and the pipeline runs to the report;
+    % on failure the pipeline exits at the post-enhancement recheck.
     if c.pipeline.enhanced
         verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'enhancement')));
         verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'grading')));
+        verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'report')));
     else
         verifyEqual(testCase, c.pipeline.exitStage, 'enhancementRecheck');
     end
@@ -54,6 +57,15 @@ function test_caseContinueMode(testCase)
 end
 
 function test_mockDisabledWithoutModelErrors(testCase)
+% With mock disabled and no trained model the pipeline must refuse before any
+% grading (MissingModel gate). When a benchmark-recorded model IS available the
+% gate legitimately does not fire, so the guard is asserted only on a system
+% without one (mirrors testStopsWhenToolboxMissing skip pattern).
+    if experiment_config().model.available
+        warning('test_pipeline:skip', ...
+            'Benchmark-recorded model present; skipping MissingModel gate test.');
+        return;
+    end
     verifyError(testCase, @() runPipeline('scenario', 'good', 'mock', false), ...
         'RetinaSense:runPipeline:MissingModel');
 end
