@@ -59,7 +59,10 @@ function [enhanced, enhMeta] = enhanceImage(borderlineImage, quality, params)
     if params.applyDenoise
         switch params.denoise.method
             case 'median'
-                enhanced = medfilt2(enhanced, params.denoise.medSize);
+                % medfilt2 is 2-D only; apply per-channel for RGB input.
+                for ch = 1:size(enhanced, 3)
+                    enhanced(:,:,ch) = medfilt2(enhanced(:,:,ch), params.denoise.medSize);
+                end
             case 'guided'
                 % imguidedfilter may not be present in all toolboxes; fall back.
                 try

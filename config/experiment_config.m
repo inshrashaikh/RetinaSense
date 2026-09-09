@@ -26,6 +26,7 @@ function cfg = experiment_config()
     % ---- Classification / DR grading ----
     cfg.classification = classification_config();
 
+<<<<<<< HEAD
     % ---- Benchmark targets for backbone selection (SIH PS 26038) ----
     % These are TARGETS used only for DECISION RULES in
     % scripts/benchmark_backbones.m. They are never reported as achieved
@@ -34,6 +35,10 @@ function cfg = experiment_config()
         'se', 0.90, ...    % referable sensitivity target
         'sp', 0.85, ...    % referable specificity target
         'tieBreak', 'size');   % 'size' | 'latency' among target-meeting backbones
+=======
+    % ---- Retinal Analysis (advisory, Stage 5) ----
+    cfg.analysis = analysis_config();
+>>>>>>> ContributionByMustafa
 
     % ---- Explainability ----
     cfg.explainability = struct( ...
@@ -53,6 +58,9 @@ function cfg = experiment_config()
     cfg.review = struct( ...
         'autoApproveAbove', 0.90, ...   % confidence >= this -> autoRefer/autoClear
         'alwaysReview',     false);     % force human review for every case
+
+    % ---- Reporting ----
+    cfg.report = report_config();
 
     % ---- Referable DR threshold (Level 2+) ----
     cfg.referThreshold = 2;   % grade >= 2 is "referable DR" (config/classification_config)

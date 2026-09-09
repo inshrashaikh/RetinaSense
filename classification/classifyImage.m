@@ -22,9 +22,17 @@ function grading = classifyImage(image, net, params)
     cfg = experiment_config();
     if nargin < 3 || isempty(params); params = cfg.classification; end
 
-    if isempty(net)
-        grading = mockGrading(image, cfg);
+    % Use params for referThreshold if provided
+    if isfield(params, 'referThreshold')
+        referThreshold = params.referThreshold;
     else
+        referThreshold = cfg.referThreshold;
+    end
+
+    if isempty(net)
+        grading = mockGrading(image, cfg, referThreshold);
+    else
+<<<<<<< HEAD
         grading = realGrading(image, net, cfg);
     end
 end
@@ -65,6 +73,17 @@ end
 function grading = mockGrading(image, cfg)
 %MOCKGRADING  Deterministic pseudo-signal stand-in (no trained model). The
 % mock is explicit: it is not a model and must not be cited as clinical output.
+=======
+        % Real inference path — implement in Sprint 2+:
+        %   im  = preprocess for net.Layers(1).InputSize
+        %   prob = predict(net, im); ...
+        grading = mockGrading(image, cfg, referThreshold);   % placeholder until model exists
+        grading.modelFile = '(real net supplied but inference TODO)';
+    end
+end
+
+function grading = mockGrading(image, cfg, referThreshold)
+>>>>>>> ContributionByMustafa
     m = cfg.mock;
     rng(m.seed, 'twister');
 
@@ -75,12 +94,24 @@ function grading = mockGrading(image, cfg)
     grade = find(rawProbs == max(rawProbs), 1) - 1;
     refIdx = cfg.classification.referIndex;
     referableProb = sum(rawProbs(refIdx:end));
+<<<<<<< HEAD
     referable = grade >= cfg.referThreshold;
+=======
+
+    % Referable-DR threshold is LEVEL 2+ (docs/ARCHITECTURE.md §2 Stage 6).
+    % Decision driven by the hard grade threshold; prob reported as evidence.
+    referable = grade >= referThreshold;
+>>>>>>> ContributionByMustafa
 
     grading = struct( ...
         'rawProbs',      rawProbs, ...
         'grade',         grade, ...
         'referableProb', referableProb, ...
         'referable',     referable, ...
+<<<<<<< HEAD
         'modelFile',     '');
 end
+=======
+        'modelFile', '');   % no trained model in mock
+end
+>>>>>>> ContributionByMustafa

@@ -51,8 +51,9 @@ No datasets, no trained models, no toolboxes beyond base MATLAB + Image
 Processing. Everything is synthetic and deterministic.
 
 ```matlab
-% add the repo root + folders to the path
-cd('D:\Project\RetinaSense');
+% add the repo root + folders to the path (path shown is an example;
+% the repo is relocatable - config/paths.m computes the root automatically)
+cd('<path-to-repo>/RetinaSense');
 addpath(genpath(cwd));
 
 % run the three gate scenarios end-to-end (good / borderline / ungradable)
@@ -62,6 +63,10 @@ demo_mock_pipeline
 c = runPipeline('scenario', 'good');          disp(c.report.summary);
 c = runPipeline('scenario', 'borderline');    disp(c.pipeline.stages);
 c = runPipeline('scenario', 'ungradable');    disp(c.quality.recapture);
+
+% launch the ophthalmologist review UI (approve / override / recapture):
+launchRetinaSenseApp('good')   % also 'borderline' | 'ungradable'
+app = RetinaSenseApp(runPipeline('scenario','good'));   % review a specific case
 
 % ingest a real file (the committed synthetic demo image):
 meta = struct('patientId','P1','eye','left','timestamp', datestr(now), 'phcId','PHC-X');
@@ -162,8 +167,9 @@ for external validation only.
 | Sprint 0 mock | Image Processing Toolbox (im2uint8, rgb2gray, adapthisteq, imadjust, imgaussfilt, imresize) |
 | Sprint 2+ grading | Deep Learning Toolbox + a pretrained backbone (resnet50 / efficientnetb0) |
 | Sprint 3 calibration | Statistics and Machine Learning Toolbox (fminsearch) |
+| Sprint 5 UI | MATLAB App Designer (review UI also runs as a programmatic `uifigure` reference; see `ui/README.md`) |
 | Sprint 6 simulation | Simulink + SimEvents |
-| Sprint 5 UI | MATLAB App Designer |
+| Stage 5 analysis | Computer Vision Toolbox, where used (`normxcorr2` template path)
 
 **No MATLAB installed on this dev machine:** the MATLAB code is canonical; the
 Python verifier mirrors the mock for CI. See §3. Toolbox-dependent functions

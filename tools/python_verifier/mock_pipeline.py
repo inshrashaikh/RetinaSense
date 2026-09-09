@@ -69,7 +69,9 @@ def new_case():
         },
         "enhancement": {"appliedOps": [], "paramsPerOp": {}, "improved": False, "recheckClass": ""},
         "evidence": {"vesselMask": None, "opticDisc": None, "fovea": None,
-                     "lesions": empty_lesions(), "confidence": ""},
+                     "lesions": empty_lesions(), "confidence": "",
+                     "opticDiscDetail": {"center": None, "bbox": None, "confidence": 0.0,
+                                         "status": "not_detected", "method": "", "note": ""}},
         "grading": {"rawProbs": [float("nan")] * 5, "grade": float("nan"),
                     "referableProb": float("nan"), "referable": False, "modelFile": ""},
         "explain": {"gradCam": None, "attentionImage": None, "evidenceOverlay": None, "note": ""},
@@ -133,6 +135,11 @@ class QualityGate:
 
         if low_fail:
             klass, reasons = "ungradable", low_fail
+        elif score < QUALITY["borderlineScore"]:
+            # Composite floor: uniformly mediocre overall quality is still
+            # ungradable even if no single metric crosses its 'low' threshold.
+            worst = min(metrics, key=metrics.__getitem__)
+            klass, reasons = "ungradable", [worst]
         elif mid_fail or score < QUALITY["goodScore"]:
             klass, reasons = "borderline", mid_fail
         else:
@@ -162,10 +169,17 @@ class QualityGate:
 # ---------------------------------------------------------------------------
 # Advisory analysis (honest empty in Sprint 0)
 # ---------------------------------------------------------------------------
-def analyze_retina(img):
-    return {"vesselMask": [[False] * len(img) for _ in range(len(img))],
+def analyze_retina(img, fov_mask=None):
+    # fov_mask optional (mirrors locateOpticDisc/segmentVessels/detectLesions
+    # accepting a caller-provided FOV mask); the Sprint 0 mock returns the same
+    # honest-empty evidence either way.
+    n = len(img)
+    return {"vesselMask": [[False] * n for _ in range(n)],
             "opticDisc": None, "fovea": None, "lesions": empty_lesions(),
-            "confidence": "low"}
+            "confidence": "low",
+            "opticDiscDetail": {"center": None, "bbox": None, "confidence": 0.0,
+                                "status": "not_detected", "method": "morphology_bright_temporal",
+                                "note": "Optic disc localization is advisory evidence only; not a diagnosis."}}
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +229,7 @@ def submit_review(case, reviewer_input=None):
                 "finalReferral": g >= REFER_THRESHOLD, "status": "overridden", "notes": r["notes"]}
     if r["action"] == "recapture":
         return {"action": "recapture", "graderId": r["graderId"], "overrideGrade": float("nan"),
-                "finalReferral": False, "status": "approved", "notes": r["notes"]}
+                "finalReferral": False, "status": "recapture", "notes": r["notes"]}
     raise ValueError("BadAction")
 
 

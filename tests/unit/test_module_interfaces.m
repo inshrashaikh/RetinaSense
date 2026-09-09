@@ -67,7 +67,7 @@ function test_recheckQualityAdoptsEnhanced(testCase)
     img = uint8(120 * ones(96, 96, 3));
     q = assessQuality(img, quality_thresholds());
     [enh, meta] = enhanceImage(img, q, preprocess_config().enhance);
-    [ok, rq, meta] = recheckQuality(enh, meta);
+    [ok, rq, meta] = recheckQuality(enh, meta, q.score);
     verifyTrue(testCase, islogical(ok));
     verifyTrue(testCase, ismember(rq.class, {'good','borderline','ungradable'}));
     verifyEqual(testCase, meta.recheckClass, rq.class);
@@ -80,8 +80,15 @@ function test_analyzeRetinaAdvisoryContract(testCase)
     verifyTrue(testCase, isfield(ev, 'opticDisc'));
     verifyTrue(testCase, isfield(ev, 'fovea'));
     verifyTrue(testCase, isfield(ev, 'lesions'));
+    verifyTrue(testCase, isfield(ev, 'confidence'));
+    verifyTrue(testCase, isfield(ev, 'opticDiscDetail'));
     verifyTrue(testCase, ismember(ev.confidence, {'low','medium','high'}));
     verifyEqual(testCase, size(ev.vesselMask), size(img(:,:,1)));
+    % opticDiscDetail contract
+    verifyTrue(testCase, isstruct(ev.opticDiscDetail));
+    verifyTrue(testCase, isfield(ev.opticDiscDetail, 'center'));
+    verifyTrue(testCase, isfield(ev.opticDiscDetail, 'status'));
+    verifyTrue(testCase, ismember(ev.opticDiscDetail.status, {'detected','low_confidence','not_detected'}));
 end
 
 function test_classifyImageContract(testCase)

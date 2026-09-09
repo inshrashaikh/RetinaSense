@@ -64,7 +64,7 @@ function c = runPipeline(varargin)
         % ---------- Stage 3-4: Enhancement if borderline ----------
         if strcmp(c.quality.class, 'borderline')
             [imgEnh, enhMeta] = enhanceImage(c.image, c.quality, cfg.preprocess.enhance);
-            [ok, recheck, enhMeta] = recheckQuality(imgEnh, enhMeta);
+            [ok, recheck, enhMeta] = recheckQuality(imgEnh, enhMeta, c.quality.score);
             c.pipeline.enhanced = ok;
             c.enhancement.appliedOps  = enhMeta.appliedOps;
             c.enhancement.paramsPerOp = enhMeta.paramsPerOp;
@@ -85,20 +85,24 @@ function c = runPipeline(varargin)
 
         % ---------- Stage 5: Retinal/Lesion analysis (ADVISORY, non-blocking) ----------
         try
-            c.evidence = analyzeRetina(c.image, [], struct());
+            analysisParams = cfg.analysis;
+            analysisParams.eye = c.meta.eye;  % pass eye orientation
+            c.evidence = analyzeRetina(c.image, [], analysisParams);
             c = addStage(c, 'analysis');
         catch ME
             % Advisory: never blocks grading. Log and continue with no evidence.
             logMessage('warn', 'PIPELINE', ...
               sprintf('Analysis advisory module skipped (non-blocking): %s', ME.message));
             c.evidence = struct( ...  % minimal valid evidence
-                'vesselMask', false(size(c.image,1), size(c.image,2)), ...
+                'vesselMask', [], ...
                 'opticDisc', [], 'fovea', [], ...
                 'lesions', struct('exudates',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0)), ...
                                   'hemorrhages',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0)), ...
                                   'microaneurysms',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0)), ...
                                   'neoVasc',struct('map',false(size(c.image,1),size(c.image,2)),'count',0,'features',zeros(4,0))), ...
-                'confidence', 'low');
+                'confidence', 'low', ...
+                'opticDiscDetail', struct('center', [], 'bbox', [], 'confidence', 0, ...
+                    'status', 'not_detected', 'method', '', 'note', 'Analysis module failed'));
         end
 
         % ---------- Stage 6: DR grading ----------
