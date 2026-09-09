@@ -18,7 +18,10 @@ function report = buildReport(caseData, params)
     end
 
     review = caseData.review;
-    if isempty(review) || ~isfield(review, 'action'); review = struct('action',''); end
+    if isempty(review) || ~isfield(review, 'action')
+        review = struct('action', '', 'graderId', '', 'overrideGrade', NaN, ...
+            'finalReferral', false, 'status', 'auto', 'notes', '');
+    end
 
     % --- Build machine-readable data subset ---
     reportData = struct( ...
@@ -92,6 +95,7 @@ function report = buildReport(caseData, params)
             reportData.evidence.lesions = struct();
             for i = 1:numel(classes)
                 cls = classes{i};
+                if ~isfield(caseData.evidence.lesions, cls), continue; end
                 les = caseData.evidence.lesions.(cls);
                 reportData.evidence.lesions.(cls) = struct( ...
                     'candidateCount',  les.count, ...
@@ -128,7 +132,7 @@ function report = buildReport(caseData, params)
         caseData.grading.referable, caseData.grading.referableProb, ...
         caseData.calibrated.confidence, caseData.calibrated.uncertainty, ...
         review.action, review.status, review.finalReferral, ...
-        caseData.evidence.confidence);
+        conditionalEvidenceConfidence(caseData));
 
     % --- Assemble report ---
     report = struct( ...
@@ -156,5 +160,14 @@ function report = buildReport(caseData, params)
             return;
         end
         density = nnz(vesselMask) / numel(vesselMask);
+    end
+
+    function conf = conditionalEvidenceConfidence(caseData)
+        if isfield(caseData, 'evidence') && isstruct(caseData.evidence) && ...
+                isfield(caseData.evidence, 'confidence') && ~isempty(caseData.evidence.confidence)
+            conf = caseData.evidence.confidence;
+        else
+            conf = 'n/a';
+        end
     end
 end

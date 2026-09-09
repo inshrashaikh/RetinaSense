@@ -22,18 +22,25 @@ function grading = classifyImage(image, net, params)
     cfg = experiment_config();
     if nargin < 3 || isempty(params); params = cfg.classification; end
 
+    % Use params for referThreshold if provided
+    if isfield(params, 'referThreshold')
+        referThreshold = params.referThreshold;
+    else
+        referThreshold = cfg.referThreshold;
+    end
+
     if isempty(net)
-        grading = mockGrading(image, cfg);
+        grading = mockGrading(image, cfg, referThreshold);
     else
         % Real inference path — implement in Sprint 2+:
         %   im  = preprocess for net.Layers(1).InputSize
         %   prob = predict(net, im); ...
-        grading = mockGrading(image, cfg);   % placeholder until model exists
+        grading = mockGrading(image, cfg, referThreshold);   % placeholder until model exists
         grading.modelFile = '(real net supplied but inference TODO)';
     end
 end
 
-function grading = mockGrading(image, cfg)
+function grading = mockGrading(image, cfg, referThreshold)
     m = cfg.mock;
     rng(m.seed, 'twister');
 
@@ -50,12 +57,12 @@ function grading = mockGrading(image, cfg)
 
     % Referable-DR threshold is LEVEL 2+ (docs/ARCHITECTURE.md §2 Stage 6).
     % Decision driven by the hard grade threshold; prob reported as evidence.
-    referable = grade >= cfg.referThreshold;
+    referable = grade >= referThreshold;
 
     grading = struct( ...
         'rawProbs',      rawProbs, ...
         'grade',         grade, ...
         'referableProb', referableProb, ...
         'referable',     referable, ...
-        'modelFile',     '');   % no trained model in mock
+        'modelFile', '');   % no trained model in mock
 end

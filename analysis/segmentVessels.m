@@ -1,10 +1,13 @@
-function vesselMask = segmentVessels(image, params)
+function vesselMask = segmentVessels(image, params, fovMask)
 %SEGMENTVESSELS  Stage 5a: vessel segmentation map (ADVISORY ONLY).
 %
 %   vesselMask = segmentVessels(image, params)
+%   vesselMask = segmentVessels(image, params, fovMask)
 %
 %   image: HxWx3 uint8 working image (already quality-gated)
 %   params: vessel segmentation parameters from config/analysis_config.m
+%   fovMask: optional HxW logical field-of-view mask from the quality gate;
+%            when omitted, one is derived from the green-channel threshold.
 %
 %   CONTRACT (docs/ARCHITECTURE.md §4.3):
 %     vesselMask: logical HxW vessel mask
@@ -22,7 +25,7 @@ function vesselMask = segmentVessels(image, params)
     end
 
     % Default honest empty result
-    vesselMask = false(1, 1);
+    vesselMask = [];
 
     % Validate input
     if isempty(image) || ndims(image) ~= 3 || size(image, 3) ~= 3
@@ -35,7 +38,11 @@ function vesselMask = segmentVessels(image, params)
     green = double(image(:,:,2)) / 255.0;
 
     % --- Create FOV mask if not provided ---
-    fovMask = green > 0.05;
+    if nargin >= 3 && islogical(fovMask) && isequal(size(fovMask), [h, w])
+        % Caller-provided mask (quality gate) takes precedence.
+    else
+        fovMask = green > 0.05;
+    end
     if nnz(fovMask) < 0.1 * h * w
         return; % insufficient FOV
     end
@@ -113,8 +120,6 @@ function vesselMask = segmentVessels(image, params)
         vesselMask = bwareaopen(vesselMask, 10);
         % Close small gaps
         vesselMask = imclose(vesselMask, strel('disk', 1));
-        % Thin to centerlines (optional, preserves topology)
-        % vesselMask = bwmorph(vesselMask, 'thin', inf); % may be too aggressive
         % Remove very thin spurs
         vesselMask = bwmorph(vesselMask, 'spur', 2);
     end

@@ -89,7 +89,7 @@ function c = newCase()
         'graderId',      '', ...
         'overrideGrade', NaN, ...  % 0..4 or NaN
         'finalReferral', false, ...
-        'status',        '', ...   % 'auto' | 'approved' | 'overridden'
+        'status',        '', ...   % 'auto' | 'approved' | 'overridden' | 'recapture' | 'reqReview'
         'notes',         '');
 
     % ---- Stage 9: Report (reporting/buildReport.m) ----

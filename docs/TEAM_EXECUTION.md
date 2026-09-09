@@ -81,7 +81,7 @@ Sprint 1 → Sprint 2 → Sprint 3 → Sprint 4 → Sprint 8 (validation/ablatio
 - `analysis/` — advisory retinal analysis (Member 2's domain)
 - `reporting/`, `ui/` — report + review UI (Member 2's domain)
 - `simulink/` — district simulation (Member 3's domain)
-- `ui/RetinaSenseApp.mlapp` — App Designer (Member 2's domain)
+- `ui/RetinaSenseApp.m` — review UI reference implementation (Member 2's domain); App Designer `.mlapp` packaging planned as follow-up
 
 ### Dependency on Other Members
 
@@ -102,13 +102,13 @@ Advisory retinal analysis (non-blocking), report generation, ophthalmologist rev
 |--------|-------|--------|
 | `analysis/` | `analyzeRetina.m`, `segmentVessels.m`, `locateOpticDisc.m`, `locateFovea.m`, `detectLesions.m`, `buildEvidence.m` | Honest stubs → real CV implementations |
 | `reporting/` | `buildReport.m`, `renderReport.m`, `submitReview.m` | Working mock → professional PDF/PNG rendering |
-| `ui/` | `RetinaSenseApp.mlapp` | Placeholder → App Designer build |
+| `ui/` | `RetinaSenseApp.m` (+ `launchRetinaSenseApp.m`) | Programmatic `uifigure` reference implementation (Sprint 5) — `.mlapp` App Designer packaging is a planned follow-up |
 
 ### Sprint Mapping
 
 | Existing Sprint | Deliverable | Key Files |
 |-----------------|-------------|-----------|
-| **Sprint 5** — Report + Review UI | Professional annotated report (PDF/PNG); App Designer ophthalmologist review interface with approve/override/recapture; `<30s` review target | `reporting/buildReport.m`, `reporting/renderReport.m`, `ui/RetinaSenseApp.mlapp` |
+| **Sprint 5** — Report + Review UI | Professional annotated report (PDF/PNG); ophthalmologist review interface with approve/override/recapture (`ui/RetinaSenseApp.m`); `<30s` review target | `reporting/buildReport.m`, `reporting/renderReport.m`, `ui/RetinaSenseApp.m` |
 | **Sprint 7** — Advisory Retinal Analysis | Classical matched-filter vessel segmentation; optic disc localization (morphology + template); fovea localization (geometric from disc); high-recall lesion candidate detection (exudates, hemorrhages, MA) | `analysis/segmentVessels.m`, `analysis/locateOpticDisc.m`, `analysis/locateFovea.m`, `analysis/detectLesions.m`, `analysis/buildEvidence.m` |
 
 ### Execution Order

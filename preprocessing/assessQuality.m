@@ -86,12 +86,32 @@ function [score, klass, failures] = classify(params, metrics)
     if ~isempty(lowFail)
         klass    = 'ungradable';
         failures = lowFail;             % drives recaptureFeedback (Stage 2)
+    elseif score < params.borderlineScore
+        % Composite floor: uniformly mediocre overall quality is still
+        % ungradable even if no single metric crosses its 'low' threshold.
+        klass    = 'ungradable';
+        failures = worstMetric(metrics);
     elseif ~isempty(midFail) || score < params.goodScore
         klass    = 'borderline';
         failures = midFail;
     else
         klass    = 'good';
         failures = {};
+    end
+end
+
+function names = worstMetric(metrics)
+    mnames = fieldnames(metrics);
+    worst  = Inf;
+    names  = {};
+    for i = 1:numel(mnames)
+        v = metrics.(mnames{i});
+        if v < worst
+            worst = v;
+            names = {mnames{i}};
+        elseif v == worst && ~isempty(names)
+            names{end+1} = mnames{i}; %#ok<AGROW>  tie -> multiple reasons
+        end
     end
 end
 

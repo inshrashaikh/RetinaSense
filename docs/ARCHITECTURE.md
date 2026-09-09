@@ -66,7 +66,7 @@ _Design document. No implementation code. See `RetinaSense_PRD.docx` for require
 - The **quality gate is the entry gate**; its recapture feedback is a first-class differentiator.
 - **Retinal analysis is advisory/evidence-only and never blocks grading** — this protects the working core (PRD §10, §13).
 - The **classifier backbone is chosen by benchmark**, not pinned (see §3.2).
-- The **Simulink model is an independent track** (its own folder) — the stated differentiator nobody else builds, genuinely built.
+- The **Simulink model is an independent track** (its own folder) — the stated differentiator nobody else builds. As of freeze, the delivery is the parameter/scenario configuration (`simulink/scenario_params.m`) plus drivers that honestly raise `NotImplemented` until the `DRTelemedicine.slx` model is constructed (Sprint 6).
 
 ---
 
@@ -121,7 +121,7 @@ _Design document. No implementation code. See `RetinaSense_PRD.docx` for require
 ### Stage 6 — DR Severity Grading
 | Input | quality-passed image (normalized to classifier input size) |
 |---|---|
-| Processing | **Transfer-learning CNN**, backbone = **benchmark-driven ResNet-50 vs EfficientNet-B0** (see §3.2), fine-tuned on APTOS 2019, 5-class head over ICDR 0–4; referable = level ≥ 2 |
+| Processing | **Transfer-learning CNN**, backbone = **benchmark-driven ResNet-50 vs EfficientNet-B0** (see §3.2; final backbone not pinned), planned fine-tune on APTOS 2019, 5-class head over ICDR 0–4; referable = level ≥ 2 |
 | Output | `grading`: `rawProbs` (1×5), `grade` (0–4), `referableProb`, `referable` (bool) |
 | Toolbox | Deep Learning (resnet50 / efficientnetb0, trainNetwork), IP |
 | Model | Standard transfer-learning CNN — do NOT invent a novel architecture |
@@ -241,7 +241,9 @@ grading = classifyImage(image, net, params)
 grading.rawProbs    1×5 double    % P(grade 0..4), row sums to 1
 grading.grade        0..4         % argmax
 grading.referableProb double 0..1 % P(grade ≥ 2) = rawProbs(3)+rawProbs(4)+rawProbs(5)
-grading.referable   logical        % referableProb ≥ referThreshold (config)
+grading.referable   logical        % grade ≥ referThreshold (config, currently 2);
+                                   % category-level rule matching clinical referral practice,
+                                   % with referableProb reported alongside for calibration
 ```
 
 ### 4.5 Explainability → Grad-CAM heatmap + lesion evidence
@@ -270,7 +272,10 @@ review.action        ∈ {approve, override, recapture}
 review.graderId      string
 review.overrideGrade 0..4 | NaN
 review.finalReferral logical       % final binary referral decision
-review.status        ∈ {auto, approved, overridden}   % auto if no human action captured
+review.status        ∈ {auto, approved, overridden, recapture, reqReview}
+                     % reqReview: AI signal routed to review queue pending an
+                     % ophthalmologist (set by runPipeline when review is
+                     % required and no reviewer input is present at run time)
 review.notes         string
 ```
 
@@ -325,8 +330,9 @@ RetinaSense/
 ├─ reporting/                    # Stage 9
 │  ├─ buildReport.m
 │  └─ renderReport.m
-├─ ui/                           # App Designer
-│  └─ RetinaSenseApp.mlapp
+├─ ui/                           # Stage 9 review UI (programmatic uifigure reference;
+│  │                             #   App Designer .mlapp packaging is a planned follow-up)
+│  └─ RetinaSenseApp.m
 ├─ evaluation/                   # Stage 10
 │  ├─ runValidation.m
 │  ├─ runAblation.m
@@ -373,7 +379,7 @@ RetinaSense/
 
 ## 7. SIMULINK ARCHITECTURE (SimEvents discrete-event model)
 
-**Model: `simulink/DRTelemedicine.slx`**
+**Model: `simulink/DRTelemedicine.slx`** *(planned artifact — not yet in the repository; the folder ships configuration + drivers that raise `NotImplemented` until the model is built, see `simulink/README.md`)*
 
 ```
 [Patient Arrival Generator] → [Acquisition Server] → [Transmission/Network Server]
@@ -561,4 +567,4 @@ AI decision + evidence + calibrated confidence
 
 **Development order:** §12 (quality gate → classifier+benchmark → calibration → Grad-CAM → report/UI, with Simulink and analysis in parallel) — protects a working core first.
 
-**Non-negotiables:** quality gate is the entry differentiator; evidence is advisory & non-blocking; calibration prevents softmax-as-certainty; Simulink genuinely built for the 100k/yr claim; no fabricated accuracy — all numbers from `evaluation/`; Messidor-2 only for external validation; backbone chosen by real benchmark, never assumed.
+**Non-negotiables:** quality gate is the entry differentiator; evidence is advisory & non-blocking; calibration prevents softmax-as-certainty; the 100k/yr claim can be made only once the Simulink model is actually built and the analysis modules pass a real benchmark — never assume it; no fabricated accuracy — all numbers from `evaluation/`; Messidor-2 only for external validation; backbone chosen by real benchmark, never assumed.

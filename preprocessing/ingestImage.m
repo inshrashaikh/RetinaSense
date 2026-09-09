@@ -40,6 +40,7 @@ function c = ingestImage(meta, imagePath)
             % For Sprint 0 the file path branch is exercised by tests pointing
             % at a committed synthetic asset.
             c.image = imreadSafe(imagePath);
+            c.imagePath = imagePath;
         catch
             raiseError('ingestImage', 'DecodeFailed', ...
                 'Could not decode image: %s', imagePath);
@@ -90,5 +91,13 @@ function im = downscaleToMax(im, maxEdge)
 end
 
 function s = helperSizeStr(im)
-    if isempty(im); s = '[]'; else s = sprintf('%dx%dx%d', size(im)); end
+    if isempty(im)
+        s = '[]';
+    else
+        sz = size(im);
+        s = sprintf('%d', sz(1));
+        for k = 2:numel(sz)
+            s = sprintf('%sx%d', s, sz(k));
+        end
+    end
 end

@@ -10,6 +10,7 @@ function filepath = renderReport(report, params)
 %     - Disclaimer
 %
 %   Output format: PDF (preferred) or PNG/TEXT fallback
+%   Layout driven by config/report_config.m.
 %
 %   References: docs/ARCHITECTURE.md §4.8, §9
 
@@ -24,15 +25,27 @@ function filepath = renderReport(report, params)
         mkdir(params.out);
     end
 
+    % Load report config for layout/format settings
+    rc = report_config();
+
     % --- Determine output format ---
-    hasExportFig = exist('exportgraphics', 'file') || exist('print', 'file');
-    % Try PDF first, fallback to PNG, then text
     formats = {'pdf', 'png', 'txt'};
+    if isfield(rc, 'format') && ~strcmp(rc.format, 'auto')
+        % Prioritize configured format
+        fmtOrder = {rc.format};
+        for i = 1:numel(formats)
+            if ~strcmp(formats{i}, rc.format)
+                fmtOrder{end+1} = formats{i}; %#ok<AGROW>
+            end
+        end
+        formats = fmtOrder;
+    end
+
     filepath = '';
     renderSuccess = false;
 
     timestamp = datestr(now, 'yyyymmdd_HHMMSS');
-    baseName = sprintf('report_%s', timestamp);
+    baseName = sprintf(rc.filenameTemplate, timestamp);
 
     for fmtIdx = 1:numel(formats)
         fmt = formats{fmtIdx};
@@ -53,7 +66,8 @@ function filepath = renderReport(report, params)
             end
         catch ME
             % Try next format
-            warning('renderReport: Format %s failed: %s', fmt, ME.message);
+            logMessage('warn', 'renderReport', ...
+                sprintf('Format %s failed: %s', fmt, ME.message));
             filepath = '';
             renderSuccess = false;
         end
@@ -73,9 +87,13 @@ function success = renderReportPDF(report, filepath, params)
 %   Page 2: Original image + Grad-CAM + Evidence overlay
 %   Page 3: Evidence detail tables
 
+    rc = report_config();
+    pw = rc.pageSize(1);  % width in inches
+    ph = rc.pageSize(2);  % height in inches
+
     % Create figure
-    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [0 0 8.5 11], ...
-        'PaperPositionMode', 'auto', 'PaperSize', [8.5 11]);
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [0 0 pw ph], ...
+        'PaperPositionMode', 'auto', 'PaperSize', [pw ph]);
 
     try
         % ==================== PAGE 1: Summary ====================
@@ -121,7 +139,11 @@ end
 function success = renderReportPNG(report, filepath, params)
 %RENDERREPORT_PNG  Render report as single PNG (fallback).
 
-    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [0 0 8.5 11]);
+    rc = report_config();
+    pw = rc.pageSize(1);
+    ph = rc.pageSize(2);
+
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [0 0 pw ph]);
     try
         renderPage1Summary(fig, report);
         if exist('exportgraphics', 'file')

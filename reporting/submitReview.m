@@ -12,7 +12,7 @@ function review = submitReview(caseData, reviewerInput, params)
 %     review.graderId      string
 %     review.overrideGrade 0..4 | NaN
 %     review.finalReferral logical (final binary referral decision)
-%     review.status        'auto' | 'approved' | 'overridden'
+%     review.status        'auto' | 'approved' | 'overridden' | 'recapture'
 %     review.notes         string
 %
 %   Final referral respects the referable-DR threshold (Level 2+): an override
@@ -56,7 +56,7 @@ function review = submitReview(caseData, reviewerInput, params)
             review = struct( ...
                 'action', 'recapture', 'graderId', r.graderId, ...
                 'overrideGrade', NaN, 'finalReferral', false, ...
-                'status', 'approved', 'notes', r.notes);
+                'status', 'recapture', 'notes', r.notes);
         otherwise
             raiseError('submitReview', 'BadAction', ...
                 'Unsupported action ''%s''.', r.action);

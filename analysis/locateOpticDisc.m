@@ -1,10 +1,13 @@
-function result = locateOpticDisc(image, params)
+function result = locateOpticDisc(image, params, fovMask)
 %LOCATEOPTICDISC  Stage 5b: optic disc localization (ADVISORY ONLY).
 %
 %   result = locateOpticDisc(image, params)
+%   result = locateOpticDisc(image, params, fovMask)
 %
 %   image: HxWx3 uint8 working image (already quality-gated)
 %   params: analysis parameters from config/analysis_config.m
+%   fovMask: optional HxW logical field-of-view mask from the quality gate;
+%            when omitted, one is derived from the green-channel threshold.
 %
 %   CONTRACT (docs/ARCHITECTURE.md §4.3):
 %     result.center       [x, y] pixel coordinate of optic disc centre, or [] if not detected
@@ -49,7 +52,11 @@ function result = locateOpticDisc(image, params)
     green = double(image(:,:,2)) / 255.0;
 
     % --- Create FOV mask (exclude dark background) ---
-    fovMask = green > 0.05;
+    if nargin >= 3 && islogical(fovMask) && isequal(size(fovMask), [h, w])
+        % Caller-provided mask (quality gate) takes precedence.
+    else
+        fovMask = green > 0.05;
+    end
     if nnz(fovMask) < 0.1 * h * w
         result.note = [result.note, ' Insufficient FOV coverage.'];
         return;
@@ -176,8 +183,10 @@ function result = locateOpticDisc(image, params)
         % Circularity score
         circScore = circularity;
 
-        % Combined score (weights from config or fixed)
-        score = 0.4 * brightness + 0.3 * temporalScore + 0.2 * sizeScore + 0.1 * circScore;
+        % Combined score (weights from config)
+        sw = p.scoringWeights;
+        score = sw.brightness * brightness + sw.temporal * temporalScore + ...
+                sw.size * sizeScore + sw.circularity * circScore;
 
         if score > bestScore
             bestScore = score;
@@ -217,7 +226,7 @@ function result = locateOpticDisc(image, params)
         result.note, result.method, result.confidence, result.status);
 
     % Template fallback if result is not confident and fallback enabled
-    if result.status == 'not_detected' && p.fallbackToTemplate
+    if strcmp(result.status, 'not_detected') && p.fallbackToTemplate
         result = tryTemplateFallback(green, fovMask, p, result);
     end
 end
@@ -242,14 +251,18 @@ function result = tryTemplateFallback(green, fovMask, p, result)
     try
         corr = normxcorr2(template, fovGreen);
         
-        % Find peak in correlation, constrained to FOV
-        corr(~fovMask) = -inf;
-        [maxCorr, linearIdx] = max(corr(:));
-        [py, px] = ind2sub(size(corr), linearIdx);
+        % normxcorr2 returns (h+2R) x (w+2R); crop valid region
+        validCorr = corr(templateRadius+1:templateRadius+h, templateRadius+1:templateRadius+w);
         
-        % Adjust for template offset
-        centerX = px - templateRadius;
-        centerY = py - templateRadius;
+        % Find peak in correlation, constrained to FOV
+        validCorr(~fovMask) = -inf;
+        [maxCorr, linearIdx] = max(validCorr(:));
+        [py, px] = ind2sub(size(validCorr), linearIdx);
+        
+        % Adjust for template offset: validCorr is cropped to image size, so
+        % (px, py) already point at the template center in image coordinates.
+        centerX = px;
+        centerY = py;
         
         % Check bounds
         if centerX > 0 && centerX <= w && centerY > 0 && centerY <= h

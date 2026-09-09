@@ -5,6 +5,7 @@ function fovea = locateFovea(image, opticDisc, params)
 %
 %   opticDisc: struct with .center [x,y] and .status from locateOpticDisc
 %   params: fovea parameters from config/analysis_config.m
+%     params.eye: 'left'|'right' (optional, defaults to 'right')
 %
 %   CONTRACT: [x, y] pixel coordinate of fovea, or [] when unknown.
 %   Derived geometrically from the disc (~1.5 disc-diam temporal), if known.
@@ -25,16 +26,24 @@ function fovea = locateFovea(image, opticDisc, params)
 
     [h, w, ~] = size(image);
 
+    % Determine eye side: temporal direction
+    % Right eye: temporal = right (positive X)
+    % Left eye:  temporal = left  (negative X)
+    if isfield(params, 'eye') && ~isempty(params.eye) && strcmpi(params.eye, 'left')
+        temporalSign = -1;
+    else
+        temporalSign = 1;  % default: right eye
+    end
+
     % --- If optic disc is known, derive fovea geometrically ---
     if isstruct(opticDisc) && ~isempty(opticDisc.center) && ...
             strcmp(opticDisc.status, 'detected')
         discCenter = opticDisc.center;
         discDiameter = mean([opticDisc.bbox(3), opticDisc.bbox(4)]); % approximate
         
-        % Fovea is temporal to disc (right for right eye, left for left eye)
-        % For now assume right eye (temporal = right side)
+        % Fovea is temporal to disc
         temporalOffset = params.discDiameterMultiplier * discDiameter;
-        foveaX = discCenter(1) + temporalOffset;
+        foveaX = discCenter(1) + temporalSign * temporalOffset;
         foveaY = discCenter(2); % roughly same vertical level
         
         % Constrain to image bounds with margin
@@ -53,10 +62,17 @@ function fovea = locateFovea(image, opticDisc, params)
     % Create FOV mask
     fovMask = green > 0.05;
     
-    % Search in temporal region (right 2/3 for right eye)
+    % Search in temporal region (direction depends on eye)
     searchMask = false(h, w);
-    temporalStart = round(w / 3);
-    searchMask(:, temporalStart:end) = true;
+    if temporalSign > 0
+        % Right eye: search right 2/3
+        temporalStart = round(w / 3);
+        searchMask(:, temporalStart:end) = true;
+    else
+        % Left eye: search left 2/3
+        temporalEnd = round(2 * w / 3);
+        searchMask(:, 1:temporalEnd) = true;
+    end
     searchMask = searchMask & fovMask;
     
     if nnz(searchMask) < 100

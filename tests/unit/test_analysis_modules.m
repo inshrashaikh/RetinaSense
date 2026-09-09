@@ -89,7 +89,7 @@ function test_segmentVesselsContract(testCase)
     
     verifyTrue(testCase, islogical(vesselMask));
     verifyEqual(testCase, size(vesselMask), size(img(:,:,1)));
-    verifyTrue(testCase, all(vesselMask(:) == 0 || vesselMask(:) == 1)); % binary
+    verifyTrue(testCase, all(vesselMask(:) == 0 | vesselMask(:) == 1)); % binary
     
     % Should be deterministic
     vesselMask2 = segmentVessels(img, p.vessels);

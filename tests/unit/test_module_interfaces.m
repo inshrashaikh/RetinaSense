@@ -67,7 +67,7 @@ function test_recheckQualityAdoptsEnhanced(testCase)
     img = uint8(120 * ones(96, 96, 3));
     q = assessQuality(img, quality_thresholds());
     [enh, meta] = enhanceImage(img, q, preprocess_config().enhance);
-    [ok, rq, meta] = recheckQuality(enh, meta);
+    [ok, rq, meta] = recheckQuality(enh, meta, q.score);
     verifyTrue(testCase, islogical(ok));
     verifyTrue(testCase, ismember(rq.class, {'good','borderline','ungradable'}));
     verifyEqual(testCase, meta.recheckClass, rq.class);

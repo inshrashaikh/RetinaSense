@@ -1,5 +1,5 @@
-function tests = test_pipeline_integration
-%TEST_PIPELINE_INTEGRATION  End-to-end integration: all gate outcomes -> report.
+function tests = test_pipeline_e2e
+%TEST_PIPELINE_E2E  End-to-end integration: all gate outcomes -> report.
     tests = functiontests(localfunctions);
 end
 

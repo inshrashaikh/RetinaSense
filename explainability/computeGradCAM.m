@@ -53,7 +53,11 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
                 cls = classes{i};
                 les = evidence.lesions.(cls);
                 if isstruct(les) && isfield(les, 'map') && ~isempty(les.map) && any(les.map(:))
-                    color = lesionColors.(cls);
+                    if isfield(lesionColors, cls)
+                        color = lesionColors.(cls);
+                    else
+                        color = [255, 255, 255]; % fallback white
+                    end
                     if isempty(color)
                         color = [255, 255, 255]; % fallback white
                     end

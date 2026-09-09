@@ -55,7 +55,11 @@ function lesions = detectLesions(image, params)
     green = double(image(:,:,2)) / 255.0;
 
     % --- Create FOV mask (exclude dark background) ---
-    fovMask = green > 0.05;
+    if isfield(params, 'fovMask') && islogical(params.fovMask) && isequal(size(params.fovMask), [h, w])
+        fovMask = params.fovMask;  % caller-provided (quality gate)
+    else
+        fovMask = green > 0.05;
+    end
     if nnz(fovMask) < 0.1 * h * w
         % Insufficient FOV - return empty
         for i = 1:numel(classes)
