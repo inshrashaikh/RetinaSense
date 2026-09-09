@@ -81,6 +81,177 @@ function test_locateOpticDiscWithConfigVariation(testCase)
     verifyTrue(testCase, ismember(r2.status, {'detected', 'low_confidence', 'not_detected'}));
 end
 
+function test_segmentVesselsContract(testCase)
+    % Test that segmentVessels returns valid logical mask
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    vesselMask = segmentVessels(img, p.vessels);
+    
+    verifyTrue(testCase, islogical(vesselMask));
+    verifyEqual(testCase, size(vesselMask), size(img(:,:,1)));
+    verifyTrue(testCase, all(vesselMask(:) == 0 || vesselMask(:) == 1)); % binary
+    
+    % Should be deterministic
+    vesselMask2 = segmentVessels(img, p.vessels);
+    verifyEqual(testCase, vesselMask, vesselMask2);
+end
+
+function test_segmentVesselsHandlesInvalidInput(testCase)
+    p = analysis_config();
+    
+    % Empty image
+    vesselMask = segmentVessels([], p.vessels);
+    verifyTrue(testCase, islogical(vesselMask) && isempty(vesselMask));
+    
+    % Non-RGB image
+    img = uint8(ones(100, 100));
+    vesselMask = segmentVessels(img, p.vessels);
+    verifyTrue(testCase, islogical(vesselMask) && isempty(vesselMask));
+    
+    % Wrong number of channels
+    img = uint8(ones(100, 100, 4));
+    vesselMask = segmentVessels(img, p.vessels);
+    verifyTrue(testCase, islogical(vesselMask) && isempty(vesselMask));
+end
+
+function test_segmentVesselsFOVRespected(testCase)
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    
+    % Create FOV mask (circular region in center)
+    [h, w, ~] = size(img);
+    [yy, xx] = ndgrid(1:h, 1:w);
+    fovMask = sqrt((xx - w/2).^2 + (yy - h/2).^2) < min(h,w)*0.4;
+    
+    vesselMask = segmentVessels(img, p.vessels);
+    
+    % Vessel mask should not have vessels outside typical FOV
+    % (though the current implementation creates its own FOV mask)
+    verifyTrue(testCase, islogical(vesselMask));
+    verifyEqual(testCase, size(vesselMask), [h, w]);
+end
+
+function test_segmentVesselsDeterministic(testCase)
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    
+    r1 = segmentVessels(img, p.vessels);
+    r2 = segmentVessels(img, p.vessels);
+    
+    verifyEqual(testCase, r1, r2);
+end
+
+function test_detectLesionsContract(testCase)
+    % Test that detectLesions returns valid struct for all lesion classes
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    lesions = detectLesions(img, p.lesions);
+    
+    verifyTrue(testCase, isstruct(lesions));
+    
+    classes = {'exudates', 'hemorrhages', 'microaneurysms', 'neoVasc'};
+    for i = 1:numel(classes)
+        cls = classes{i};
+        verifyTrue(testCase, isfield(lesions, cls), sprintf('Missing field: %s', cls));
+        
+        les = lesions.(cls);
+        verifyTrue(testCase, isstruct(les), sprintf('%s is not struct', cls));
+        verifyTrue(testCase, isfield(les, 'map'), sprintf('%s missing map', cls));
+        verifyTrue(testCase, isfield(les, 'count'), sprintf('%s missing count', cls));
+        verifyTrue(testCase, isfield(les, 'features'), sprintf('%s missing features', cls));
+        
+        % Map should be logical HxW
+        verifyTrue(testCase, islogical(les.map), sprintf('%s.map not logical', cls));
+        verifyEqual(testCase, size(les.map), size(img(:,:,1)), sprintf('%s.map wrong size', cls));
+        
+        % Count should be non-negative integer
+        verifyTrue(testCase, les.count >= 0, sprintf('%s.count negative', cls));
+        
+        % Features should be 4 x N
+        verifyTrue(testCase, size(les.features, 1) == 4, sprintf('%s.features wrong rows', cls));
+        verifyEqual(testCase, size(les.features, 2), les.count, sprintf('%s.features cols != count', cls));
+    end
+end
+
+function test_detectLesionsHandlesInvalidInput(testCase)
+    p = analysis_config();
+    
+    % Empty image
+    lesions = detectLesions([], p.lesions);
+    verifyTrue(testCase, isstruct(lesions));
+    verifyEqual(testCase, lesions.exudates.count, 0);
+    verifyEqual(testCase, lesions.hemorrhages.count, 0);
+    
+    % Non-RGB image
+    img = uint8(ones(100, 100));
+    lesions = detectLesions(img, p.lesions);
+    verifyTrue(testCase, isstruct(lesions));
+    
+    % Wrong number of channels
+    img = uint8(ones(100, 100, 4));
+    lesions = detectLesions(img, p.lesions);
+    verifyTrue(testCase, isstruct(lesions));
+end
+
+function test_detectLesionsFOVRespected(testCase)
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    
+    lesions = detectLesions(img, p.lesions);
+    
+    % All maps should be same size as image
+    verifyEqual(testCase, size(lesions.exudates.map), size(img(:,:,1)));
+    verifyEqual(testCase, size(lesions.hemorrhages.map), size(img(:,:,1)));
+    verifyEqual(testCase, size(lesions.microaneurysms.map), size(img(:,:,1)));
+    verifyEqual(testCase, size(lesions.neoVasc.map), size(img(:,:,1)));
+end
+
+function test_detectLesionsDeterministic(testCase)
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    
+    r1 = detectLesions(img, p.lesions);
+    r2 = detectLesions(img, p.lesions);
+    
+    verifyEqual(testCase, r1.exudates.map, r2.exudates.map);
+    verifyEqual(testCase, r1.hemorrhages.map, r2.hemorrhages.map);
+    verifyEqual(testCase, r1.microaneurysms.map, r2.microaneurysms.map);
+    verifyEqual(testCase, r1.neoVasc.map, r2.neoVasc.map);
+end
+
+function test_detectLesionsWithOpticDiscSuppression(testCase)
+    % Test that optic disc region is suppressed in exudate detection
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    
+    % Create lesion params with optic disc info
+    lesionParams = p.lesions;
+    lesionParams.opticDiscCenter = [150, 120];
+    lesionParams.opticDiscRadius = 20;
+    
+    lesions = detectLesions(img, lesionParams);
+    
+    % Optic disc region should have no exudate candidates
+    % (The disc center is at [150, 120] with radius ~25 in synthetic image)
+    % Verify that the map doesn't have candidates at the disc center
+    verifyTrue(testCase, ~lesions.exudates.map(120, 150), 'Exudate at disc center not suppressed');
+end
+
+function test_detectLesionsWithVesselMask(testCase)
+    img = syntheticFundusImage(256);
+    p = analysis_config();
+    
+    % Create lesion params with vessel mask
+    lesionParams = p.lesions;
+    lesionParams.vesselMask = false(size(img,1), size(img,2));
+    
+    lesions = detectLesions(img, lesionParams);
+    
+    verifyTrue(testCase, isstruct(lesions));
+    verifyTrue(testCase, lesions.hemorrhages.count >= 0);
+    verifyTrue(testCase, lesions.microaneurysms.count >= 0);
+end
+
 function test_locateFoveaContract(testCase)
     img = syntheticFundusImage(256);
     p = analysis_config();

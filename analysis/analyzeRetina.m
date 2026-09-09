@@ -13,7 +13,21 @@ function evidence = analyzeRetina(image, fovMask, params)
     vesselMask = segmentVessels(image, params.vessels);
     opticDisc  = locateOpticDisc(image, params.opticDisc);
     fovea      = locateFovea(image, opticDisc, params.fovea);
-    lesions    = detectLesions(image, params.lesions);
+    
+    % Prepare lesion detection params with cross-module info
+    lesionParams = params.lesions;
+    if isstruct(opticDisc) && isfield(opticDisc, 'center') && ~isempty(opticDisc.center)
+        lesionParams.opticDiscCenter = opticDisc.center;
+        if isfield(opticDisc, 'bbox') && ~isempty(opticDisc.bbox)
+            lesionParams.opticDiscRadius = mean([opticDisc.bbox(3), opticDisc.bbox(4)]) / 2;
+        end
+    end
+    lesionParams.vesselMask = vesselMask;
+    if ~isempty(fovea) && numel(fovea) >= 2
+        lesionParams.foveaCenter = fovea(1:2);
+    end
+    
+    lesions    = detectLesions(image, lesionParams);
 
     evidence = buildEvidence(vesselMask, opticDisc, fovea, lesions);
 end

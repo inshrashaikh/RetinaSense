@@ -39,13 +39,31 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
         im = im2uint8(rgb2gray(image));  % start from working image
         evidenceOverlay = repmat(im, [1 1 3]);
         
-        % Lesion candidates
+        % Lesion candidates - color-coded overlay
         if isfield(evidence, 'lesions')
+            % Color coding for each lesion class (R, G, B)
+            lesionColors = struct( ...
+                'exudates',       [255, 255, 0], ...  % Yellow
+                'hemorrhages',    [255, 0, 0], ...    % Red
+                'microaneurysms', [255, 0, 255], ...  % Magenta
+                'neoVasc',        [0, 255, 255]);     % Cyan
+            
             classes = fieldnames(evidence.lesions);
             for i = 1:numel(classes)
-                les = evidence.lesions.(classes{i});
-                if isstruct(les) && ~isempty(les.map) && any(les.map(:))
-                    % TODO(Sprint 7): color-code candidates; once real detections exist.
+                cls = classes{i};
+                les = evidence.lesions.(cls);
+                if isstruct(les) && isfield(les, 'map') && ~isempty(les.map) && any(les.map(:))
+                    color = lesionColors.(cls);
+                    if isempty(color)
+                        color = [255, 255, 255]; % fallback white
+                    end
+                    % Overlay lesion candidates as colored pixels
+                    lesionMask = les.map;
+                    for c = 1:3
+                        channel = evidenceOverlay(:,:,c);
+                        channel(lesionMask) = color(c);
+                        evidenceOverlay(:,:,c) = channel;
+                    end
                 end
             end
         end

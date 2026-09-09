@@ -48,6 +48,9 @@ function cfg = experiment_config()
         'autoApproveAbove', 0.90, ...   % confidence >= this -> autoRefer/autoClear
         'alwaysReview',     false);     % force human review for every case
 
+    % ---- Reporting ----
+    cfg.report = report_config();
+
     % ---- Referable DR threshold (Level 2+) ----
     cfg.referThreshold = 2;   % grade >= 2 is "referable DR" (config/classification_config)
 
