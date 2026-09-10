@@ -52,6 +52,8 @@ function params = scenario_params(scenarioName, overrides)
 
     params.aiProcessTimeMin   = 1.5;     % AI grading service time
     params.queueCapacity      = 200;     % FIFO queue before AI server
+    params.acquisitionQueueCapacity = 50; % FIFO queue before acquisition (arrivals + retakes)
+    params.reviewQueueCapacity = 100;    % FIFO queue before ophthalmologist review
 
     params.recaptureRate      = 0.10;    % fraction of images sent back for retake
     params.referralRate       = 0.08;    % fraction going to ophthalmologist review
@@ -110,6 +112,7 @@ function validate_params(p)
     fields = {'patientsPerDay', 'workHoursPerDay', 'meanArrivalTimeMin', ...
               'acquisitionTimeMin', 'imageSizeMB', 'bandwidthMbps', ...
               'transmissionDelayS', 'aiProcessTimeMin', 'queueCapacity', ...
+              'acquisitionQueueCapacity', 'reviewQueueCapacity', ...
               'recaptureRate', 'referralRate', 'reviewTimeMin', ...
               'numReviewers', 'seed', 'simTimeMin'};
     for i = 1:numel(fields)
@@ -144,6 +147,12 @@ function validate_params(p)
     end
     if ~(isnumeric(p.queueCapacity) && isscalar(p.queueCapacity) && isfinite(p.queueCapacity) && p.queueCapacity >= 1 && floor(p.queueCapacity) == p.queueCapacity)
         fail('InvalidParam', 'queueCapacity must be a positive integer scalar >= 1.');
+    end
+    if ~(isnumeric(p.acquisitionQueueCapacity) && isscalar(p.acquisitionQueueCapacity) && isfinite(p.acquisitionQueueCapacity) && p.acquisitionQueueCapacity >= 1 && floor(p.acquisitionQueueCapacity) == p.acquisitionQueueCapacity)
+        fail('InvalidParam', 'acquisitionQueueCapacity must be a positive integer scalar >= 1.');
+    end
+    if ~(isnumeric(p.reviewQueueCapacity) && isscalar(p.reviewQueueCapacity) && isfinite(p.reviewQueueCapacity) && p.reviewQueueCapacity >= 1 && floor(p.reviewQueueCapacity) == p.reviewQueueCapacity)
+        fail('InvalidParam', 'reviewQueueCapacity must be a positive integer scalar >= 1.');
     end
     if ~(isnumeric(p.recaptureRate) && isscalar(p.recaptureRate) && isfinite(p.recaptureRate) && p.recaptureRate >= 0 && p.recaptureRate < 1)
         fail('InvalidParam', 'recaptureRate must be a numeric scalar in [0, 1).');

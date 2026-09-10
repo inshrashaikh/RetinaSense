@@ -18,6 +18,15 @@ function analysis = analyze_capacity(results)
 %     If Simulink execution is PENDING, analytical service bounds are provided
 %     as theoretical estimates, but the final capacity conclusion remains
 %     PENDING. Simulation results are never fabricated.
+%
+%   Outputs:
+%     analysis - struct with fields:
+%       requiredAnnualCapacity, requiredDailyThroughput,
+%       executionStatus, targetAchieved, bottleneckResource,
+%       currentCapacity, currentCapacityType,
+%       resources (acquisition/network/aiProcessing/reviewers),
+%       bandwidthImpact, reviewerRequirement, aiImpact,
+%       scenarios, scalabilityAnalysis
 
     targetAnnual = 100000;
     targetDaily  = targetAnnual / 365; % ~273.97 -> 274
@@ -94,7 +103,10 @@ function analysis = analyze_capacity(results)
     analysis.aiImpact            = aiImpact;
     analysis.scenarios           = scenarioTable;
 
-    % 7. Display formatted summary report
+    % 7. Scalability analysis: what is needed for 100,000 patients/year
+    analysis.scalabilityAnalysis = compute_scalability_analysis(pBase, targetDaily, targetAnnual, results);
+
+    % 8. Display formatted summary report
     print_capacity_report(analysis);
 end
 
@@ -275,6 +287,94 @@ function bn = determine_simulated_bottleneck(results)
 end
 
 % -------------------------------------------------------------------------
+% Scalability / what-if analysis for 100,000 patients/year
+% -------------------------------------------------------------------------
+function sa = compute_scalability_analysis(p, targetDaily, targetAnnual, results)
+%COMPUTE_SCALABILITY_ANALYSIS  Determine resource requirements for 100k/yr.
+%
+%   This is an ANALYTICAL what-if calculation, not a simulation claim.
+%   It determines what resources/capacity would be needed to reach the
+%   SIH 2026 PS 26038 target of 100,000 patients/year.
+
+    sa = struct();
+    sa.targetAnnual = targetAnnual;
+    sa.targetDaily  = targetDaily;
+
+    % Current measured throughput (from simulation or analytical)
+    hasSimResult = any(strcmp({results.executionStatus}, 'SUCCESS') & ~isnan([results.throughput]));
+    if hasSimResult
+        baseIdx = find(strcmp({results.scenario}, 'baseline'), 1);
+        if ~isempty(baseIdx) && ~isnan(results(baseIdx).throughput)
+            sa.currentDailyThroughput = results(baseIdx).throughput;
+        else
+            sa.currentDailyThroughput = max([results.throughput]);
+        end
+    else
+        % Analytical estimate
+        effAcqTime = p.acquisitionTimeMin * 60 / (1 - p.recaptureRate);
+        capAcq = (p.simTimeMin * 60) / effAcqTime;
+        capNet = (p.simTimeMin * 60) / (p.transmissionDelayS + (p.imageSizeMB * 8 / p.bandwidthMbps));
+        capAi  = (p.simTimeMin * 60) / (p.aiProcessTimeMin * 60);
+        capRev = (p.numReviewers * (p.simTimeMin * 60 / (p.reviewTimeMin * 60))) / p.referralRate;
+        sa.currentDailyThroughput = min([capAcq, capNet, capAi, capRev]);
+    end
+
+    sa.currentAnnualCapacity = sa.currentDailyThroughput * 365;
+    sa.gapToTarget            = targetAnnual - sa.currentAnnualCapacity;
+    sa.scalingFactor          = targetDaily / sa.currentDailyThroughput;
+    sa.isTargetAchieved       = sa.currentAnnualCapacity >= targetAnnual;
+
+    % What resources would need to change for 100k/yr
+    sa.requiredChanges = {};
+
+    % Acquisition: how many stations needed
+    effAcqTime = p.acquisitionTimeMin * 60 / (1 - p.recaptureRate);
+    acqDailyCap = (p.simTimeMin * 60) / effAcqTime;
+    acqStationsNeeded = ceil(targetDaily / acqDailyCap);
+    if acqStationsNeeded > 1
+        sa.requiredChanges{end+1} = sprintf( ...
+            'Acquisition: %d camera station(s) required (currently 1)', acqStationsNeeded);
+    end
+    sa.acqStationsNeeded = acqStationsNeeded;
+
+    % Network: minimum bandwidth
+    availSecPerPatient = (p.simTimeMin * 60) / targetDaily - p.transmissionDelayS;
+    if availSecPerPatient > 0
+        minBw = (p.imageSizeMB * 8) / availSecPerPatient;
+    else
+        minBw = Inf;
+    end
+    if minBw > p.bandwidthMbps
+        sa.requiredChanges{end+1} = sprintf( ...
+            'Network: >= %.2f Mbps required (currently %.1f Mbps)', minBw, p.bandwidthMbps);
+    end
+    sa.minBandwidthRequired = minBw;
+
+    % AI: maximum allowable processing time
+    maxAiTime = (p.simTimeMin * 60) / targetDaily;
+    if maxAiTime < p.aiProcessTimeMin * 60
+        sa.requiredChanges{end+1} = sprintf( ...
+            'AI: <= %.1f sec processing time required (currently %.1f sec)', ...
+            maxAiTime, p.aiProcessTimeMin * 60);
+    end
+    sa.maxAiProcessingTimeSec = maxAiTime;
+
+    % Reviewers: minimum count
+    reviewsNeededPerDay = targetDaily * p.referralRate;
+    revCapacityPerReviewer = (p.simTimeMin * 60) / (p.reviewTimeMin * 60);
+    minReviewers = ceil(reviewsNeededPerDay / revCapacityPerReviewer);
+    if minReviewers > p.numReviewers
+        sa.requiredChanges{end+1} = sprintf( ...
+            'Reviewers: %d required (currently %d)', minReviewers, p.numReviewers);
+    end
+    sa.minReviewersRequired = minReviewers;
+
+    if isempty(sa.requiredChanges)
+        sa.requiredChanges{1} = 'No resource changes needed for 100k/yr (analytical)';
+    end
+end
+
+% -------------------------------------------------------------------------
 % Report display
 % -------------------------------------------------------------------------
 function print_capacity_report(a)
@@ -312,6 +412,25 @@ function print_capacity_report(a)
             s.scenario, s.executionStatus, simCapStr, ...
             sprintf('%.0f/yr', s.analyticalMaxAnnualCap), s.analyticalBottleneck);
     end
+    fprintf('%s\n\n', repmat('=', 1, 95));
+
+    % Scalability analysis section
+    sa = a.scalabilityAnalysis;
+    fprintf('--- SCALABILITY: 100,000 PATIENTS/YEAR (SIH 2026 PS 26038 TARGET) ---\n');
+    fprintf('Current measured capacity:  %.0f patients/year (%.1f/day)\n', ...
+        sa.currentAnnualCapacity, sa.currentDailyThroughput);
+    fprintf('Target:                     %d patients/year (%.1f/day)\n', ...
+        sa.targetAnnual, sa.targetDaily);
+    fprintf('Gap to target:              %.0f patients/year\n', sa.gapToTarget);
+    fprintf('Scaling factor needed:      %.2fx\n', sa.scalingFactor);
+    fprintf('Target achieved (analytical): %s\n', string(sa.isTargetAchieved));
+    fprintf('\nRequired resource changes for 100k/yr:\n');
+    for i = 1:numel(sa.requiredChanges)
+        fprintf('  - %s\n', sa.requiredChanges{i});
+    end
+    fprintf('\nNOTE: 100,000 patients/year is a SCALABILITY TARGET from the SIH\n');
+    fprintf('problem statement. The current prototype measures actual throughput;\n');
+    fprintf('the scaling analysis above is an analytical what-if calculation.\n');
     fprintf('%s\n\n', repmat('=', 1, 95));
 end
 

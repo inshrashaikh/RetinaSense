@@ -32,12 +32,11 @@ function grading = classifyImage(image, net, params)
     if isempty(net)
         grading = mockGrading(image, cfg, referThreshold);
     else
-<<<<<<< HEAD
-        grading = realGrading(image, net, cfg);
+        grading = realGrading(image, net, cfg, referThreshold);
     end
 end
 
-function grading = realGrading(image, net, cfg)
+function grading = realGrading(image, net, cfg, referThreshold)
 %REALGRADING  Predict 5-class softmax via the trained CNN.
     if ~isempty(net)
         % Ensure a usable imageDatastore-free array for predict.
@@ -54,7 +53,7 @@ function grading = realGrading(image, net, cfg)
     grade = find(rawProbs == max(rawProbs), 1) - 1;
     refIdx = cfg.classification.referIndex;      % grade>=2 -> idx 3..5
     referableProb = sum(rawProbs(refIdx:end));
-    referable = grade >= cfg.referThreshold;     % decision on hard grade (Level 2+)
+    referable = grade >= referThreshold;          % decision on hard grade (Level 2+)
 
     grading = struct( ...
         'rawProbs',      rawProbs, ...
@@ -70,20 +69,9 @@ function name = getNetName(net)
     name = '(untitled network)';
 end
 
-function grading = mockGrading(image, cfg)
+function grading = mockGrading(image, cfg, referThreshold)
 %MOCKGRADING  Deterministic pseudo-signal stand-in (no trained model). The
 % mock is explicit: it is not a model and must not be cited as clinical output.
-=======
-        % Real inference path — implement in Sprint 2+:
-        %   im  = preprocess for net.Layers(1).InputSize
-        %   prob = predict(net, im); ...
-        grading = mockGrading(image, cfg, referThreshold);   % placeholder until model exists
-        grading.modelFile = '(real net supplied but inference TODO)';
-    end
-end
-
-function grading = mockGrading(image, cfg, referThreshold)
->>>>>>> ContributionByMustafa
     m = cfg.mock;
     rng(m.seed, 'twister');
 
@@ -94,24 +82,15 @@ function grading = mockGrading(image, cfg, referThreshold)
     grade = find(rawProbs == max(rawProbs), 1) - 1;
     refIdx = cfg.classification.referIndex;
     referableProb = sum(rawProbs(refIdx:end));
-<<<<<<< HEAD
-    referable = grade >= cfg.referThreshold;
-=======
 
     % Referable-DR threshold is LEVEL 2+ (docs/ARCHITECTURE.md §2 Stage 6).
     % Decision driven by the hard grade threshold; prob reported as evidence.
     referable = grade >= referThreshold;
->>>>>>> ContributionByMustafa
 
     grading = struct( ...
         'rawProbs',      rawProbs, ...
         'grade',         grade, ...
         'referableProb', referableProb, ...
         'referable',     referable, ...
-<<<<<<< HEAD
-        'modelFile',     '');
-end
-=======
         'modelFile', '');   % no trained model in mock
 end
->>>>>>> ContributionByMustafa
