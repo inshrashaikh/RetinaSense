@@ -57,6 +57,11 @@ classdef RetinaSenseApp < handle
         PatientLabel        matlab.ui.control.Label
         EvidenceConfLabel   matlab.ui.control.Label
 
+        % ---- Final decision labels (after review) ----
+        FinalGradeLabel     matlab.ui.control.Label
+        FinalReferralLabel  matlab.ui.control.Label
+        AIMutableLabel      matlab.ui.control.Label
+
         % ---- Evidence/visualization tabs ----
         VizTabGroup     matlab.ui.container.TabGroup
         OriginalTab     matlab.ui.container.Tab
@@ -91,8 +96,10 @@ classdef RetinaSenseApp < handle
 
         % ---- Status bar ----
         StatusFieldLabel    matlab.ui.control.Label
+    end
 
-        % ---- Internal state ----
+    % Public access to review state for external callers/tests.
+    properties (Access = public)
         CurrentReport       struct
         ReviewComplete      logical = false
     end
@@ -255,8 +262,9 @@ classdef RetinaSenseApp < handle
                 app.Case.review = review;
                 app.ReviewComplete = true;
                 updateReviewStatus(app, review);
-                setStatus(app, sprintf('Grade overridden to %d (%s).', ...
-                    overrideGrade, app.GRADE_LABELS{overrideGrade + 1}));
+                setStatus(app, sprintf('Grade overridden: AI grade %d -> Final grade %d (%s).', ...
+                    app.Case.grading.grade, overrideGrade, ...
+                    app.GRADE_LABELS{overrideGrade + 1}));
             catch ME
                 setStatus(app, sprintf('Override failed: %s', ME.message));
             end
@@ -400,6 +408,42 @@ classdef RetinaSenseApp < handle
                 confColors = struct('low', [0.8 0 0], 'medium', [0.8 0.5 0], 'high', [0 0.5 0]);
                 app.EvidenceConfLabel.FontColor = confColors.(c.evidence.confidence);
             end
+
+            % Final Decision (populated after review)
+            if isfield(c, 'review') && isfield(c.review, 'action') && ...
+                    ~isempty(c.review.action) && ~strcmp(c.review.action, '')
+                % Review has been submitted — show final grade
+                if isfield(c.review, 'finalGrade') && ~isnan(c.review.finalGrade)
+                    fgIdx = c.review.finalGrade + 1;
+                    gradeColors = {[0 0.5 0], [0 0.6 0], [0.8 0.5 0], [0.8 0 0], [0.8 0 0]};
+                    app.FinalGradeLabel.Text = sprintf('Final Grade: %d (%s)', ...
+                        c.review.finalGrade, c.review.finalGradeLabel);
+                    app.FinalGradeLabel.FontColor = gradeColors{min(fgIdx, 5)};
+
+                    if c.review.finalReferral
+                        app.FinalReferralLabel.Text = 'FINAL: REFER TO OPHTHALMOLOGIST';
+                        app.FinalReferralLabel.FontColor = [0.8 0 0];
+                        app.FinalReferralLabel.FontWeight = 'bold';
+                    else
+                        app.FinalReferralLabel.Text = 'Final Referral: No referral';
+                        app.FinalReferralLabel.FontColor = [0 0.5 0];
+                    end
+                end
+
+                % AI immutability badge
+                if isfield(c.review, 'aiGradeImmutable') && c.review.aiGradeImmutable
+                    app.AIMutableLabel.Text = 'AI Grade: IMMUTABLE (original preserved)';
+                    app.AIMutableLabel.FontColor = [0 0.4 0.7];
+                    app.AIMutableLabel.FontWeight = 'bold';
+                end
+            else
+                % No review yet — show pending
+                app.FinalGradeLabel.Text = 'Final Grade: Pending review';
+                app.FinalGradeLabel.FontColor = [0.5 0.5 0.5];
+                app.FinalReferralLabel.Text = 'Final Referral: Pending review';
+                app.FinalReferralLabel.FontColor = [0.5 0.5 0.5];
+                app.AIMutableLabel.Text = '';
+            end
         end
 
         function updateVisualizationTabs(app)
@@ -418,7 +462,7 @@ classdef RetinaSenseApp < handle
                 imshow(c.explain.attentionImage, 'Parent', app.GradCAMAxes);
                 title(app.GradCAMAxes, 'Model Attention (Grad-CAM)');
             else
-                showUnavailable(app.GradCAMAxes, ...
+                app.showUnavailable(app.GradCAMAxes, ...
                     'Grad-CAM', ...
                     'Unavailable (no trained model)');
             end
@@ -430,7 +474,7 @@ classdef RetinaSenseApp < handle
                 imshow(vesselOverlay, 'Parent', app.VesselsAxes);
                 title(app.VesselsAxes, 'Vessel Evidence');
             else
-                showUnavailable(app.VesselsAxes, ...
+                app.showUnavailable(app.VesselsAxes, ...
                     'Vessel Segmentation', ...
                     'No vessel evidence detected');
             end
@@ -481,11 +525,11 @@ classdef RetinaSenseApp < handle
         %UPDATELESIONVISUALIZATION  Create lesion evidence overlay.
             c = app.Case;
             if ~isfield(c, 'image') || isempty(c.image)
-                showUnavailable(app.LesionsAxes, 'Lesions', 'No image available');
+                app.showUnavailable(app.LesionsAxes, 'Lesions', 'No image available');
                 return;
             end
             if ~isfield(c, 'evidence') || ~isfield(c.evidence, 'lesions')
-                showUnavailable(app.LesionsAxes, 'Lesions', 'No lesion evidence available');
+                app.showUnavailable(app.LesionsAxes, 'Lesions', 'No lesion evidence available');
                 return;
             end
 
@@ -519,7 +563,7 @@ classdef RetinaSenseApp < handle
             end
 
             if ~hasAny
-                showUnavailable(app.LesionsAxes, ...
+                app.showUnavailable(app.LesionsAxes, ...
                     'Lesion Candidates', ...
                     'No candidate evidence detected');
             else
@@ -575,8 +619,8 @@ classdef RetinaSenseApp < handle
                         app.StatusLabel.Text = 'Status: Approved';
                         app.StatusLabel.FontColor = [0 0.5 0];
                     case 'overridden'
-                        app.StatusLabel.Text = sprintf('Status: Overridden (grade %d)', ...
-                            c.review.overrideGrade);
+                        app.StatusLabel.Text = sprintf('Status: Overridden (final grade %d)', ...
+                            c.review.finalGrade);
                         app.StatusLabel.FontColor = [0 0.5 0];
                     case 'reqReview'
                         app.StatusLabel.Text = 'Status: Awaiting Review';
@@ -585,9 +629,40 @@ classdef RetinaSenseApp < handle
                         app.StatusLabel.Text = sprintf('Status: %s', c.review.status);
                         app.StatusLabel.FontColor = [0 0 0];
                 end
+
+                % Show final grade if available
+                if isfield(c.review, 'finalGrade') && ~isnan(c.review.finalGrade)
+                    fgIdx = c.review.finalGrade + 1;
+                    gradeColors = {[0 0.5 0], [0 0.6 0], [0.8 0.5 0], [0.8 0 0], [0.8 0 0]};
+                    app.FinalGradeLabel.Text = sprintf('Final Grade: %d (%s)', ...
+                        c.review.finalGrade, c.review.finalGradeLabel);
+                    app.FinalGradeLabel.FontColor = gradeColors{min(fgIdx, 5)};
+                end
+
+                if isfield(c.review, 'finalReferral')
+                    if c.review.finalReferral
+                        app.FinalReferralLabel.Text = 'FINAL: REFER TO OPHTHALMOLOGIST';
+                        app.FinalReferralLabel.FontColor = [0.8 0 0];
+                        app.FinalReferralLabel.FontWeight = 'bold';
+                    else
+                        app.FinalReferralLabel.Text = 'Final Referral: No referral';
+                        app.FinalReferralLabel.FontColor = [0 0.5 0];
+                    end
+                end
+
+                if isfield(c.review, 'aiGradeImmutable') && c.review.aiGradeImmutable
+                    app.AIMutableLabel.Text = 'AI Grade: IMMUTABLE (original preserved)';
+                    app.AIMutableLabel.FontColor = [0 0.4 0.7];
+                    app.AIMutableLabel.FontWeight = 'bold';
+                end
             else
                 app.StatusLabel.Text = 'Status: Pending Review';
                 app.StatusLabel.FontColor = [0.5 0.5 0.5];
+                app.FinalGradeLabel.Text = 'Final Grade: Pending review';
+                app.FinalGradeLabel.FontColor = [0.5 0.5 0.5];
+                app.FinalReferralLabel.Text = 'Final Referral: Pending review';
+                app.FinalReferralLabel.FontColor = [0.5 0.5 0.5];
+                app.AIMutableLabel.Text = '';
             end
 
             % Disable buttons if review already complete
@@ -609,7 +684,7 @@ classdef RetinaSenseApp < handle
                     app.StatusLabel.Text = 'Status: APPROVED';
                     app.StatusLabel.FontColor = [0 0.5 0];
                 case 'override'
-                    app.StatusLabel.Text = sprintf('Status: OVERRIDDEN (grade %d -> %d)', ...
+                    app.StatusLabel.Text = sprintf('Status: OVERRIDDEN (AI grade %d -> final %d)', ...
                         app.Case.grading.grade, review.overrideGrade);
                     app.StatusLabel.FontColor = [0 0.5 0];
                 case 'recapture'
@@ -617,6 +692,32 @@ classdef RetinaSenseApp < handle
                     app.StatusLabel.FontColor = [0.8 0.5 0];
                 otherwise
                     app.StatusLabel.Text = sprintf('Status: %s', review.status);
+            end
+
+            % Update final grade display
+            if ~isnan(review.finalGrade)
+                fgIdx = review.finalGrade + 1;
+                gradeColors = {[0 0.5 0], [0 0.6 0], [0.8 0.5 0], [0.8 0 0], [0.8 0 0]};
+                app.FinalGradeLabel.Text = sprintf('Final Grade: %d (%s)', ...
+                    review.finalGrade, review.finalGradeLabel);
+                app.FinalGradeLabel.FontColor = gradeColors{min(fgIdx, 5)};
+            end
+
+            % Update final referral
+            if review.finalReferral
+                app.FinalReferralLabel.Text = 'FINAL: REFER TO OPHTHALMOLOGIST';
+                app.FinalReferralLabel.FontColor = [0.8 0 0];
+                app.FinalReferralLabel.FontWeight = 'bold';
+            else
+                app.FinalReferralLabel.Text = 'Final Referral: No referral';
+                app.FinalReferralLabel.FontColor = [0 0.5 0];
+            end
+
+            % AI immutability badge
+            if review.aiGradeImmutable
+                app.AIMutableLabel.Text = 'AI Grade: IMMUTABLE (original preserved)';
+                app.AIMutableLabel.FontColor = [0 0.4 0.7];
+                app.AIMutableLabel.FontWeight = 'bold';
             end
 
             % Disable review buttons after action
@@ -769,12 +870,42 @@ classdef RetinaSenseApp < handle
             yStart = yStart - lineH;
             app.EvidenceConfLabel = makeLabel(app.RightPanel, ...
                 'Evidence: ---', xL, yStart, 440, 'normal');
+
+            yStart = yStart - lineH - 15;
+
+            % Final Decision (populated after review)
+            makeLabel(app.RightPanel, 'FINAL DECISION', xL, yStart, 440, 'bold');
+
+            yStart = yStart - lineH;
+            app.FinalGradeLabel = makeLabel(app.RightPanel, ...
+                'Final Grade: ---', xL, yStart, 440, 'bold', 12);
+
+            yStart = yStart - lineH;
+            app.FinalReferralLabel = makeLabel(app.RightPanel, ...
+                'Final Referral: ---', xL, yStart, 440, 'normal');
+
+            yStart = yStart - lineH;
+            app.AIMutableLabel = makeLabel(app.RightPanel, ...
+                '', xL, yStart, 440, 'normal', 9);
         end
 
         function buildVisualizationTabs(app)
-        %BUILDVISUALIZATIONTABS  Create the evidence tab group.
+        %BUILDVISUALIZATIONTABS  Create the evidence tab group + lesion summary.
             app.VizTabGroup = uitabgroup(app.CenterPanel, ...
-                'Position', [10 10 420 520]);
+                'Position', [10 10 420 455]);
+
+            % ---- Lesion candidate summary (compact 2x2 above the tabs) ----
+            makeLabel(app.CenterPanel, ...
+                'LESION CANDIDATES (candidate evidence, not diagnosis)', ...
+                10, 536, 420, 'bold', 9);
+            app.ExudatesLabel = makeLabel(app.CenterPanel, ...
+                'Exudates: N/A', 10, 508, 205, 'normal', 8);
+            app.HemorrhagesLabel = makeLabel(app.CenterPanel, ...
+                'Hemorrhages: N/A', 225, 508, 205, 'normal', 8);
+            app.MicroaneurysmsLabel = makeLabel(app.CenterPanel, ...
+                'Microaneurysms: N/A', 10, 480, 205, 'normal', 8);
+            app.NeoVascLabel = makeLabel(app.CenterPanel, ...
+                'NeoVasc: N/A', 225, 480, 205, 'normal', 8);
 
             % Original
             app.OriginalTab = uitab(app.VizTabGroup, 'Title', 'Original');
@@ -981,7 +1112,7 @@ function lbl = makeLabel(parent, text, x, y, w, style, fontSize)
         'Position', [x y w 22], ...
         'FontSize', fontSize, ...
         'FontWeight', fontWeight, ...
-        'VerticalAlignment', 'middle');
+        'VerticalAlignment', 'center');
 end
 
 function color = getQualityColor(qClass)

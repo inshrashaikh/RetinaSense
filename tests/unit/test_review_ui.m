@@ -612,3 +612,319 @@ function test_endToEndOverrideAndReport(testCase)
     verifyTrue(testCase, isfield(c.report.data, 'evidence'));
     verifyEqual(testCase, c.report.review.overrideGrade, 3);
 end
+
+% =====================================================================
+%  Test 8: finalGrade / aiGradeImmutable Contract
+% =====================================================================
+
+function test_approveSetsFinalGrade(testCase)
+%TEST_APPROVESETSGRADE  Verify approve action sets finalGrade to AI grade.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    reviewerInput = struct('action', 'approve', 'graderId', 'FG-01', ...
+        'overrideGrade', NaN, 'notes', '');
+    review = submitReview(c, reviewerInput, cfg);
+
+    verifyTrue(testCase, isfield(review, 'finalGrade'), 'Missing finalGrade');
+    verifyTrue(testCase, isfield(review, 'finalGradeLabel'), 'Missing finalGradeLabel');
+    verifyTrue(testCase, isfield(review, 'aiGradeImmutable'), 'Missing aiGradeImmutable');
+    verifyEqual(testCase, review.finalGrade, c.grading.grade);
+    verifyTrue(testCase, review.aiGradeImmutable);
+end
+
+function test_overrideSetsFinalGrade(testCase)
+%TEST_OVERRIDESETSGRADE  Verify override sets finalGrade to overrideGrade.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    reviewerInput = struct('action', 'override', 'graderId', 'FG-02', ...
+        'overrideGrade', 4, 'notes', 'Severe case.');
+    review = submitReview(c, reviewerInput, cfg);
+
+    verifyEqual(testCase, review.finalGrade, 4);
+    verifyEqual(testCase, review.finalGradeLabel, 'Proliferative DR');
+    verifyTrue(testCase, review.aiGradeImmutable);
+    verifyTrue(testCase, review.finalReferral);
+end
+
+function test_autoReviewSetsFinalGrade(testCase)
+%TEST_AUTOREVIEWSETSGRADE  Verify auto-review sets finalGrade to AI grade.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    review = submitReview(c, [], cfg);
+
+    verifyEqual(testCase, review.finalGrade, c.grading.grade);
+    verifyTrue(testCase, review.aiGradeImmutable);
+end
+
+function test_recaptureSetsFinalGradeNaN(testCase)
+%TEST_RECAPTURESETSGRADE  Verify recapture sets finalGrade to NaN.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    reviewerInput = struct('action', 'recapture', 'graderId', 'FG-03', ...
+        'overrideGrade', NaN, 'notes', 'Image artifact.');
+    review = submitReview(c, reviewerInput, cfg);
+
+    verifyTrue(testCase, isnan(review.finalGrade));
+    verifyTrue(testCase, review.aiGradeImmutable);
+    verifyFalse(testCase, review.finalReferral);
+end
+
+function test_overridePreservesOriginalGrading(testCase)
+%TEST_OVERRIDEPRESERVESORIGINALGRADING  Verify override does not modify caseData.grading.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    origGrade = c.grading.grade;
+    origProbs = c.grading.rawProbs;
+    origReferable = c.grading.referable;
+
+    reviewerInput = struct('action', 'override', 'graderId', 'FG-04', ...
+        'overrideGrade', 4, 'notes', '');
+    review = submitReview(c, reviewerInput, cfg);
+
+    % Original grading MUST be unchanged
+    verifyEqual(testCase, c.grading.grade, origGrade);
+    verifyEqual(testCase, c.grading.rawProbs, origProbs);
+    verifyEqual(testCase, c.grading.referable, origReferable);
+
+    % Review carries override separately
+    verifyEqual(testCase, review.finalGrade, 4);
+    verifyTrue(testCase, review.aiGradeImmutable);
+end
+
+function test_finalGradeLabelValid(testCase)
+%TEST_FINALGRADELABELVALID  Verify finalGradeLabel is a valid DR label string.
+    validLabels = {'No DR', 'Mild NPDR', 'Moderate NPDR', 'Severe NPDR', 'Proliferative DR', ...
+                   'Pending recapture', 'Unknown'};
+    for grade = 0:4
+        c = runPipeline('scenario', 'good');
+        cfg = experiment_config();
+        reviewerInput = struct('action', 'override', 'graderId', 'T', ...
+            'overrideGrade', grade, 'notes', '');
+        review = submitReview(c, reviewerInput, cfg);
+        verifyTrue(testCase, ismember(review.finalGradeLabel, validLabels), ...
+            sprintf('Invalid label for grade %d: %s', grade, review.finalGradeLabel));
+    end
+end
+
+% =====================================================================
+%  Test 9: Report Contains finalGrade / aiGradeImmutable
+% =====================================================================
+
+function test_reportContainsFinalGrade(testCase)
+%TEST_REPORTCONTAINSGRADE  Verify report data contains finalGrade and aiGradeImmutable.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    % Approve and build report
+    reviewerInput = struct('action', 'approve', 'graderId', 'RPT-FG', ...
+        'overrideGrade', NaN, 'notes', '');
+    c.review = submitReview(c, reviewerInput, cfg);
+    report = buildReport(c, cfg);
+
+    verifyTrue(testCase, isfield(report.data, 'finalGrade'), 'Report missing finalGrade');
+    verifyTrue(testCase, isfield(report.data, 'finalGradeLabel'), 'Report missing finalGradeLabel');
+    verifyTrue(testCase, isfield(report.data, 'aiGradeImmutable'), 'Report missing aiGradeImmutable');
+    verifyEqual(testCase, report.data.finalGrade, c.grading.grade);
+    verifyTrue(testCase, report.data.aiGradeImmutable);
+end
+
+function test_reportOverrideShowsFinalGrade(testCase)
+%TEST_REPORTOVERRIDESHOWSGRADE  Verify report carries override finalGrade.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    reviewerInput = struct('action', 'override', 'graderId', 'RPT-FGO', ...
+        'overrideGrade', 3, 'notes', '');
+    c.review = submitReview(c, reviewerInput, cfg);
+    report = buildReport(c, cfg);
+
+    verifyEqual(testCase, report.data.finalGrade, 3);
+    verifyEqual(testCase, report.data.finalGradeLabel, 'Severe NPDR');
+    verifyEqual(testCase, report.data.grade, c.grading.grade);  % AI grade preserved
+    verifyTrue(testCase, report.data.aiGradeImmutable);
+end
+
+function test_reportContainsCalibratedProbs(testCase)
+%TEST_REPORTCONTAINSCALIBRATEDPROBS  Verify report data contains calibratedProbs.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    report = buildReport(c, cfg);
+
+    verifyTrue(testCase, isfield(report.data, 'calibratedProbs'), 'Report missing calibratedProbs');
+    verifyTrue(testCase, numel(report.data.calibratedProbs) == 5, 'calibratedProbs not 1x5');
+    verifyTrue(testCase, abs(sum(report.data.calibratedProbs) - 1) < 1e-6, ...
+        'calibratedProbs do not sum to 1');
+end
+
+% =====================================================================
+%  Test 10: Final Grade Contract (continued)
+% =====================================================================
+
+function test_recaptureReviewFinalState(testCase)
+%TEST_RECAPTUREREVIEWFINALSTATE  Verify recapture review state on an ungradable case.
+    c = runPipeline('scenario', 'ungradable');
+    cfg = experiment_config();
+
+    reviewerInput = struct('action', 'recapture', 'graderId', 'UN-01', ...
+        'overrideGrade', NaN, 'notes', 'Re-image requested.');
+    review = submitReview(c, reviewerInput, cfg);
+
+    verifyEqual(testCase, review.action, 'recapture');
+    verifyTrue(testCase, isnan(review.finalGrade));
+    verifyEqual(testCase, review.finalGradeLabel, 'Pending recapture');
+    verifyFalse(testCase, review.finalReferral);
+    verifyTrue(testCase, review.aiGradeImmutable);
+end
+
+function test_ungradableStopsGradingAndRecaptures(testCase)
+%TEST_UNGRADABLESTOPSGRADING  Quality gate must stop grading and produce recapture state.
+    c = runPipeline('scenario', 'ungradable');
+    cfg = experiment_config();
+
+    % Quality gate stops grading honestly: no real AI grade was produced.
+    verifyEqual(testCase, c.quality.class, 'ungradable');
+    verifyTrue(testCase, isnan(c.grading.grade), ...
+        'Ungradable case must not carry a real AI grade');
+    verifyTrue(testCase, isfield(c.quality, 'recapture'), 'Missing recapture feedback');
+
+    % Recapture guidance is honest and actionable.
+    verifyTrue(testCase, ~isempty(c.quality.recapture.reasonCode));
+    verifyTrue(testCase, ~isempty(c.quality.recapture.instruction));
+
+    % buildReport must not crash and must NOT fabricate a grade/referral.
+    report = buildReport(c, cfg);
+    verifyTrue(testCase, isnan(report.data.grade));
+    verifyEqual(testCase, report.data.gradeLabel, 'N/A (ungradable)');
+    verifyTrue(testCase, isnan(report.data.finalGrade));
+    verifyEqual(testCase, report.data.finalGradeLabel, 'Pending recapture');
+    verifyFalse(testCase, report.data.finalReferral);
+    verifyEqual(testCase, report.data.recapture.reasonCode, c.quality.recapture.reasonCode);
+
+    % Summary states the ungradable truth and the recapture instruction.
+    verifyTrue(testCase, contains(report.summary, 'UNGRADABLE', 'IgnoreCase', true), ...
+        'Summary must state image is ungradable');
+    verifyTrue(testCase, contains(report.summary, c.quality.recapture.instruction), ...
+        'Summary must carry the recapture instruction');
+
+    % renderReport must not crash on the ungradable case.
+    out = fullfile(tempdir, 'rs_ungradable_test');
+    if ~exist(out, 'dir'), mkdir(out); end
+    fp = renderReport(report, struct('out', out));
+    verifyTrue(testCase, exist(fp, 'file') == 2, 'No report file produced');
+end
+
+% =====================================================================
+%  Test 11: AI vs Final Decision Separation (no fabrication)
+% =====================================================================
+
+function test_aiPredictionAndFinalDecisionSeparated(testCase)
+%TEST_AIPREDICTIONANDFINALDECISIONSEPARATED  AI grade stays immutable; human decision carried separately.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+    origGrade = c.grading.grade;
+
+    reviewerInput = struct('action', 'override', 'graderId', 'SEP-01', ...
+        'overrideGrade', 3, 'notes', '');
+    c.review = submitReview(c, reviewerInput, cfg);
+    report = buildReport(c, cfg);
+
+    % AI prediction preserved untouched (immutability).
+    verifyEqual(testCase, report.data.grade, origGrade, 'AI grade must not change');
+    verifyTrue(testCase, report.data.aiGradeImmutable);
+
+    % Human final decision carried in a SEPARATE field.
+    verifyEqual(testCase, report.data.finalGrade, 3);
+    verifyEqual(testCase, report.data.finalGradeLabel, 'Severe NPDR');
+    verifyEqual(testCase, report.data.reviewAction, 'override');
+    verifyTrue(testCase, isfield(report.data, 'finalGrade'), 'finalGrade field missing');
+    verifyTrue(testCase, isfield(report.data, 'grade'), 'grade field missing');
+
+    % Summary reports BOTH the AI grade and the human final decision.
+    verifyTrue(testCase, contains(report.summary, sprintf('AI DR Grade %d', origGrade)));
+    verifyTrue(testCase, contains(report.summary, 'Final grade: 3 (Severe NPDR)'));
+end
+
+function test_reportNoFabricatedValues(testCase)
+%TEST_REPORTNOFABRICATEDVALUES  All decision-relevant report values trace back to case data.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+    c.review = submitReview(c, struct('action', 'approve', 'graderId', 'NF-01', ...
+        'overrideGrade', NaN, 'notes', ''), cfg);
+    report = buildReport(c, cfg);
+    d = report.data;
+
+    verifyEqual(testCase, d.grade, c.grading.grade);
+    verifyEqual(testCase, d.rawProbs, c.grading.rawProbs);
+    verifyEqual(testCase, d.referable, c.grading.referable);
+    verifyEqual(testCase, d.referableProb, c.grading.referableProb);
+    verifyEqual(testCase, d.calibratedProbs, c.calibrated.calibratedProbs);
+    verifyEqual(testCase, d.confidence, c.calibrated.confidence);
+    verifyEqual(testCase, d.uncertainty, c.calibrated.uncertainty);
+    verifyEqual(testCase, d.reviewRequired, c.calibrated.reviewRequired);
+    verifyEqual(testCase, d.finalGrade, c.review.finalGrade);
+    verifyEqual(testCase, d.finalReferral, c.review.finalReferral);
+    verifyEqual(testCase, d.quality, c.quality.class);
+    verifyEqual(testCase, d.qualityScore, c.quality.score);
+end
+
+% =====================================================================
+%  Test 12: Review-Required Flow & Missing Optional Evidence
+% =====================================================================
+
+function test_reviewRequiredValueThroughReport(testCase)
+%TEST_REVIEWREQUIREDVALUETHROUGHTREPORT  reviewRequired flag flows into the report.
+    c = runPipeline('scenario', 'good');
+    c.calibrated.reviewRequired = true;   % mock/test flag, not a clinical claim
+    cfg = experiment_config();
+
+    report = buildReport(c, cfg);
+    verifyTrue(testCase, report.data.reviewRequired, 'reviewRequired lost in report');
+
+    % Approve closes the review; the decision is recorded in the report.
+    reviewerInput = struct('action', 'approve', 'graderId', 'RR-01', ...
+        'overrideGrade', NaN, 'notes', '');
+    c.review = submitReview(c, reviewerInput, cfg);
+    report2 = buildReport(c, cfg);
+    verifyEqual(testCase, report2.review.status, 'approved');
+    verifyEqual(testCase, report2.data.reviewAction, 'approve');
+    verifyEqual(testCase, report2.data.finalGrade, c.grading.grade);
+end
+
+function test_missingGradCamEvidenceRenders(testCase)
+%TEST_MISSINGGRADCAMEVIDENCERENDERS  Missing optional Grad-CAM/evidence must not crash reporting.
+    c = runPipeline('scenario', 'good');
+    cfg = experiment_config();
+
+    % Strip optional AI/explainability outputs to honest 'not available' state.
+    c.explain = struct('gradCam', [], 'attentionImage', [], ...
+        'evidenceOverlay', [], 'note', 'No trained model (mock/test).');
+    c.evidence.vesselMask = [];
+    c.evidence.opticDisc = [];
+    c.evidence.fovea = [];
+    c.evidence.confidence = 'low';
+    c.evidence.opticDiscDetail = struct('center', [], 'bbox', [], ...
+        'confidence', 0, 'status', 'not_detected', 'method', '', 'note', '');
+    c.evidence.lesions = struct( ...
+        'exudates', struct('map', [], 'count', 0, 'features', []), ...
+        'hemorrhages', struct('map', [], 'count', 0, 'features', []), ...
+        'microaneurysms', struct('map', [], 'count', 0, 'features', []), ...
+        'neoVasc', struct('map', [], 'count', 0, 'features', []));
+
+    report = buildReport(c, cfg);
+    verifyTrue(testCase, isfield(report.data, 'explainability'));
+    verifyFalse(testCase, report.data.explainability.gradCamAvailable);
+    verifyFalse(testCase, report.data.evidence.vessels.available);
+    verifyFalse(testCase, report.data.evidence.lesions.exudates.hasCandidates);
+
+    % Rendering must succeed for both scale and fallback formats.
+    out = fullfile(tempdir, 'rs_missev');
+    if ~exist(out, 'dir'), mkdir(out); end
+    fp = renderReport(report, struct('out', out));
+    verifyTrue(testCase, exist(fp, 'file') == 2, 'No report file produced');
+end

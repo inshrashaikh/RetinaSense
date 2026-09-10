@@ -167,15 +167,43 @@ function success = renderReportText(report, filepath, params)
         error('Cannot write report to %s', filepath);
     end
 
+    d = report.data;
     fprintf(fid, '%s\n', '=================================================================');
     fprintf(fid, '%s\n', '                    RETINASENSE SCREENING REPORT');
     fprintf(fid, '%s\n', '=================================================================');
     fprintf(fid, '\n');
-    fprintf(fid, '%s\n', report.summary);
+    fprintf(fid, 'Patient: %s  |  Eye: %s  |  PHC: %s\n', d.patientId, d.eye, d.phcId);
+    fprintf(fid, 'Timestamp: %s\n', d.timestamp);
     fprintf(fid, '\n');
+    fprintf(fid, 'Quality: %s (score %.2f)\n', upper(d.quality), d.qualityScore);
+    fprintf(fid, '\n');
+
+    if isnan(d.grade) || strcmpi(d.quality, 'ungradable')
+        % Ungradable: honest recapture notice, no fabricated grade/referral.
+        [qReason, qInstr] = recaptureInfo(d);
+        fprintf(fid, 'SCREENING RESULT: IMAGE UNGRADABLE - RECAPTURE REQUESTED\n');
+        fprintf(fid, 'Failure reasons: %s\n', qualityFailuresStr(d));
+        fprintf(fid, 'Recapture requested (%s): %s\n', qReason, qInstr);
+        fprintf(fid, 'No AI grade or referral decision was produced for this image.\n');
+        fprintf(fid, '\n');
+    else
+        fprintf(fid, 'AI DR Grade: %d (%s)  |  Referable: %d  |  Referable Prob: %.3f\n', ...
+            d.grade, d.gradeLabel, d.referable, d.referableProb);
+        fprintf(fid, 'Calibrated Probs: [%.2f %.2f %.2f %.2f %.2f]\n', d.calibratedProbs);
+        fprintf(fid, 'Confidence: %.3f  |  Uncertainty: %.3f\n', d.confidence, d.uncertainty);
+        fprintf(fid, '\n');
+        fprintf(fid, 'Review Action: %s  |  Grader: %s  |  Status: %s\n', ...
+            d.reviewAction, d.reviewGraderId, d.reviewStatus);
+        fprintf(fid, 'Final Grade: %d (%s)\n', d.finalGrade, d.finalGradeLabel);
+        fprintf(fid, 'Final Referral: %d\n', d.finalReferral);
+        fprintf(fid, 'AI Grade Immutable: %d\n', d.aiGradeImmutable);
+        fprintf(fid, '\n');
+    end
+    fprintf(fid, '%s\n', '-----------------------------------------------------------------');
+    fprintf(fid, '%s\n', report.summary);
     fprintf(fid, '%s\n', '-----------------------------------------------------------------');
     fprintf(fid, 'DISCLAIMER: %s\n', report.disclaimer);
-    fprintf(fid, '%s\n', '-----------------------------------------------------------------');
+    fprintf(fid, '%s\n', '=================================================================');
     fclose(fid);
     success = exist(filepath, 'file');
 end
@@ -186,18 +214,33 @@ function renderPage1Summary(fig, report)
     d = report.data;
     clf(fig);
 
+    rc = report_config();
+    textColor = rc.colors.body;
+    sectionColor = rc.colors.section;
+    highlightColor = rc.colors.highlight;
+    warningColor = rc.colors.warning;
+    disclaimerColor = rc.colors.disclaimer;
+
     % Title
-    titleStr = 'RetinaSense Retinal Screening Report';
-    title(titleStr, 'FontSize', 18, 'FontWeight', 'bold');
+    text(0.5, 0.97, 'RetinaSense Retinal Screening Report', ...
+        'FontSize', 18, 'FontWeight', 'bold', ...
+        'HorizontalAlignment', 'center', 'Color', rc.colors.title);
+    text(0.5, 0.945, sprintf('Generated: %s', datestr(now, 'yyyy-mm-dd HH:MM:SS')), ...
+        'FontSize', 9, 'HorizontalAlignment', 'center', 'Color', disclaimerColor);
+
     hold on;
 
-    % --- Case Information ---
-    yPos = 0.85;
-    lineH = 0.045;
+    % Layout constants
     xLeft = 0.08;
-    xRight = 0.55;
+    xMid = 0.35;
+    xRight = 0.58;
+    lineH = 0.032;
+    sectionGap = 0.018;
 
-    text(xLeft, yPos, 'CASE INFORMATION', 'FontSize', 14, 'FontWeight', 'bold');
+    yPos = 0.91;
+
+    % ---- CASE INFORMATION ----
+    text(xLeft, yPos, 'CASE INFORMATION', 'FontSize', 12, 'FontWeight', 'bold', 'Color', sectionColor);
     yPos = yPos - lineH;
     info = {
         {'Patient ID:', d.patientId};
@@ -206,86 +249,162 @@ function renderPage1Summary(fig, report)
         {'PHC ID:', d.phcId};
     };
     for i = 1:numel(info)
-        text(xLeft, yPos, info{i}{1}, 'FontSize', 11);
-        text(xRight, yPos, info{i}{2}, 'FontSize', 11, 'FontWeight', 'bold');
+        text(xLeft, yPos, info{i}{1}, 'FontSize', 10, 'Color', textColor);
+        text(xMid, yPos, info{i}{2}, 'FontSize', 10, 'FontWeight', 'bold', 'Color', textColor);
         yPos = yPos - lineH;
     end
 
-    yPos = yPos - lineH;
-    text(xLeft, yPos, 'IMAGE QUALITY', 'FontSize', 14, 'FontWeight', 'bold');
+    % ---- IMAGE QUALITY ----
+    yPos = yPos - sectionGap;
+    text(xLeft, yPos, 'IMAGE QUALITY', 'FontSize', 12, 'FontWeight', 'bold', 'Color', sectionColor);
     yPos = yPos - lineH;
     qc = d.quality;
     qm = d.qualityMetrics;
+    qColor = textColor;
+    if strcmpi(qc, 'ungradable'); qColor = warningColor;
+    elseif strcmpi(qc, 'borderline'); qColor = [0.7 0.4 0]; end
     info = {
-        {'Overall Quality:', qc};
-        {'Quality Score:', sprintf('%.2f', d.qualityScore)};
-        {'Focus:', sprintf('%.2f', qm.focus)};
-        {'Illumination:', sprintf('%.2f', qm.illumination)};
-        {'FOV Coverage:', sprintf('%.2f', qm.fovCoverage)};
-        {'Artifacts:', sprintf('%.2f', qm.artifacts)};
-        {'Enhanced:', d.enhanced};
+        {'Overall Quality:', upper(qc), qColor};
+        {'Quality Score:', sprintf('%.2f', d.qualityScore), textColor};
+        {'Focus:', sprintf('%.2f', qm.focus), textColor};
+        {'Illumination:', sprintf('%.2f', qm.illumination), textColor};
+        {'FOV Coverage:', sprintf('%.2f', qm.fovCoverage), textColor};
+        {'Artifacts:', sprintf('%.2f', qm.artifacts), textColor};
+        {'Enhanced:', mat2str(d.enhanced), textColor};
     };
     for i = 1:numel(info)
-        text(xLeft, yPos, info{i}{1}, 'FontSize', 11);
-        text(xRight, yPos, info{i}{2}, 'FontSize', 11);
+        text(xLeft, yPos, info{i}{1}, 'FontSize', 10, 'Color', textColor);
+        text(xMid, yPos, info{i}{2}, 'FontSize', 10, 'FontWeight', 'bold', 'Color', info{i}{3});
         yPos = yPos - lineH;
     end
 
-    % --- DR Grading ---
+    % ---- DR SCREENING RESULT ----
+    if isnan(d.grade) || strcmpi(d.quality, 'ungradable')
+        % Ungradable: recapture notice; no grade/referral is fabricated.
+        yPos = yPos - sectionGap;
+        text(xLeft, yPos, 'SCREENING RESULT', 'FontSize', 12, 'FontWeight', 'bold', 'Color', warningColor);
+        yPos = yPos - lineH;
+        text(xLeft, yPos, 'IMAGE UNGRADABLE  -  RECAPTURE REQUESTED', 'FontSize', 12, ...
+            'FontWeight', 'bold', 'Color', [0.8 0 0]);
+        yPos = yPos - lineH;
+        text(xLeft, yPos, 'Failure reasons:', 'FontSize', 10, 'Color', textColor);
+        text(xMid, yPos, qualityFailuresStr(d), 'FontSize', 10, 'FontWeight', 'bold', 'Color', warningColor);
+        yPos = yPos - lineH;
+        [qReason, qInstr] = recaptureInfo(d);
+        text(xLeft, yPos, 'Recapture requested:', 'FontSize', 10, 'Color', textColor);
+        text(xMid, yPos, sprintf('(%s)', qReason), 'FontSize', 10, 'FontWeight', 'bold', 'Color', warningColor);
+        yPos = yPos - lineH;
+        text(xLeft, yPos - 0.01, qInstr, 'FontSize', 10, 'Color', textColor);
+        yPos = yPos + lineH;
+        yPos = yPos - lineH;
+        text(xLeft, yPos, 'No AI grade or referral decision was produced for this image.', ...
+            'FontSize', 10, 'FontWeight', 'bold', 'Color', warningColor);
+        yPos = yPos - lineH;
+    else
+    yPos = yPos - sectionGap;
+    text(xLeft, yPos, 'DR SCREENING RESULT', 'FontSize', 12, 'FontWeight', 'bold', 'Color', sectionColor);
     yPos = yPos - lineH;
-    text(xLeft, yPos, 'DR SCREENING RESULT', 'FontSize', 14, 'FontWeight', 'bold');
+
+    % AI Grade (original, immutable)
+    gradeIdx = d.grade + 1;
+    gradeColors = {[0 0.5 0], [0 0.6 0], [0.7 0.4 0], [0.8 0 0], [0.8 0 0]};
+    gColor = gradeColors{min(gradeIdx, 5)};
+
+    % Show AI grade and final grade side by side
+    aiGradeStr = sprintf('AI DR Grade: %d (%s)', d.grade, d.gradeLabel);
+    text(xLeft, yPos, aiGradeStr, 'FontSize', 11, 'FontWeight', 'bold', 'Color', gColor);
+
+    if ~isnan(d.finalGrade) && d.finalGrade ~= d.grade
+        % Override: show final grade on same line
+        fgIdx = d.finalGrade + 1;
+        fgColor = gradeColors{min(fgIdx, 5)};
+        overrideStr = sprintf('   >> Final Grade: %d (%s)', d.finalGrade, d.finalGradeLabel);
+        text(xLeft + 0.32, yPos, overrideStr, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fgColor);
+    end
     yPos = yPos - lineH;
+
+    % Referable
     refStr = 'Not Referable';
-    if d.referable; refStr = 'Referable (Level 2+)'; end
-    info = {
-        {'AI DR Grade:', sprintf('%d (%s)', d.grade, d.gradeLabel)};
-        {'Referable:', refStr};
-        {'Referable Probability:', sprintf('%.3f', d.referableProb)};
-        {'Raw Probabilities:', sprintf('[%.2f %.2f %.2f %.2f %.2f]', d.rawProbs)};
-    };
-    for i = 1:numel(info)
-        text(xLeft, yPos, info{i}{1}, 'FontSize', 11);
-        text(xRight, yPos, info{i}{2}, 'FontSize', 11);
-        yPos = yPos - lineH;
+    refColor = highlightColor;
+    if d.referable; refStr = 'REFERABLE (Level 2+)'; refColor = warningColor; end
+    text(xLeft, yPos, 'Referral Status:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, refStr, 'FontSize', 10, 'FontWeight', 'bold', 'Color', refColor);
+    yPos = yPos - lineH;
+
+    % Raw probs
+    text(xLeft, yPos, 'Raw Probabilities:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, sprintf('[%.2f %.2f %.2f %.2f %.2f]', d.rawProbs), ...
+        'FontSize', 10, 'Color', textColor);
+    yPos = yPos - lineH;
+
+    % Referable probability
+    text(xLeft, yPos, 'Referable Probability:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, sprintf('%.3f', d.referableProb), 'FontSize', 10, 'FontWeight', 'bold', 'Color', textColor);
+    yPos = yPos - lineH;
+
+    % ---- CALIBRATION & CONFIDENCE ----
+    yPos = yPos - sectionGap;
+    text(xLeft, yPos, 'CALIBRATION & CONFIDENCE', 'FontSize', 12, 'FontWeight', 'bold', 'Color', sectionColor);
+    yPos = yPos - lineH;
+
+    text(xLeft, yPos, 'Calibrated Probs:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, sprintf('[%.2f %.2f %.2f %.2f %.2f]', d.calibratedProbs), ...
+        'FontSize', 10, 'Color', textColor);
+    yPos = yPos - lineH;
+
+    text(xLeft, yPos, 'Confidence:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, sprintf('%.3f', d.confidence), 'FontSize', 10, 'FontWeight', 'bold', 'Color', textColor);
+    yPos = yPos - lineH;
+
+    text(xLeft, yPos, 'Uncertainty:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, sprintf('%.3f', d.uncertainty), 'FontSize', 10, 'Color', textColor);
+    yPos = yPos - lineH;
+
+    revReqStr = 'Not required';
+    revReqColor = highlightColor;
+    if d.reviewRequired; revReqStr = 'REQUIRED'; revReqColor = warningColor; end
+    text(xLeft, yPos, 'Review Required:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, revReqStr, 'FontSize', 10, 'FontWeight', 'bold', 'Color', revReqColor);
+    yPos = yPos - lineH;
+
+    % ---- HUMAN REVIEW & FINAL DECISION ----
+    yPos = yPos - sectionGap;
+    text(xLeft, yPos, 'HUMAN REVIEW & FINAL DECISION', 'FontSize', 12, 'FontWeight', 'bold', 'Color', sectionColor);
+    yPos = yPos - lineH;
+
+    text(xLeft, yPos, 'Review Action:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, d.reviewAction, 'FontSize', 10, 'FontWeight', 'bold', 'Color', textColor);
+    yPos = yPos - lineH;
+
+    text(xLeft, yPos, 'Grader ID:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, d.reviewGraderId, 'FontSize', 10, 'Color', textColor);
+    yPos = yPos - lineH;
+
+    text(xLeft, yPos, 'Review Status:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, d.reviewStatus, 'FontSize', 10, 'FontWeight', 'bold', 'Color', textColor);
+    yPos = yPos - lineH;
+
+    % Final referral decision
+    frStr = 'No referral';
+    frColor = highlightColor;
+    if d.finalReferral; frStr = 'FINAL: REFER TO OPHTHALMOLOGIST'; frColor = warningColor; end
+    text(xLeft, yPos, 'Final Referral:', 'FontSize', 10, 'Color', textColor);
+    text(xMid, yPos, frStr, 'FontSize', 10, 'FontWeight', 'bold', 'Color', frColor);
+    yPos = yPos - lineH;
+
+    % AI immutability badge
+    if d.aiGradeImmutable
+        text(xLeft, yPos, 'AI Grade Immutable:', 'FontSize', 10, 'Color', textColor);
+        text(xMid, yPos, 'YES — original AI grading preserved', 'FontSize', 10, ...
+            'FontWeight', 'bold', 'Color', [0 0.4 0.7]);
+    end
     end
 
-    % --- Calibration & Confidence ---
-    yPos = yPos - lineH;
-    text(xLeft, yPos, 'CALIBRATION & CONFIDENCE', 'FontSize', 14, 'FontWeight', 'bold');
-    yPos = yPos - lineH;
-    info = {
-        {'Calibrated Confidence:', sprintf('%.3f', d.confidence)};
-        {'Uncertainty:', sprintf('%.3f', d.uncertainty)};
-        {'Review Required:', d.reviewRequired};
-    };
-    for i = 1:numel(info)
-        text(xLeft, yPos, info{i}{1}, 'FontSize', 11);
-        text(xRight, yPos, info{i}{2}, 'FontSize', 11);
-        yPos = yPos - lineH;
-    end
-
-    % --- Human Review ---
-    yPos = yPos - lineH;
-    text(xLeft, yPos, 'HUMAN REVIEW', 'FontSize', 14, 'FontWeight', 'bold');
-    yPos = yPos - lineH;
-    info = {
-        {'Review Action:', d.reviewAction};
-        {'Grader ID:', d.reviewGraderId};
-        {'Review Status:', d.reviewStatus};
-        {'Final Referral:', d.finalReferral};
-    };
-    for i = 1:numel(info)
-        text(xLeft, yPos, info{i}{1}, 'FontSize', 11);
-        text(xRight, yPos, info{i}{2}, 'FontSize', 11);
-        yPos = yPos - lineH;
-    end
-
-    % --- Disclaimer ---
-    yPos = yPos - 2*lineH;
-    disclaimer = report.disclaimer;
-    text(0.08, yPos, 'DISCLAIMER', 'FontSize', 12, 'FontWeight', 'bold');
-    yPos = yPos - lineH;
-    text(0.08, yPos, disclaimer, 'FontSize', 9, 'Color', [0.4 0.4 0.4]);
+    % ---- DISCLAIMER ----
+    yPos = 0.06;
+    text(0.08, yPos, 'DISCLAIMER', 'FontSize', 10, 'FontWeight', 'bold', 'Color', warningColor);
+    text(0.08, yPos - lineH, report.disclaimer, 'FontSize', 8, 'Color', disclaimerColor);
+    text(0.08, yPos - 2*lineH, rc.gradCamNote, 'FontSize', 8, 'Color', disclaimerColor);
 
     axis off;
     hold off;
@@ -447,4 +566,27 @@ end
 
 function s = ternary(cond, trueVal, falseVal)
     if cond; s = trueVal; else; s = falseVal; end
+end
+
+function [reason, instruction] = recaptureInfo(d)
+%RECAPTUREINFO  Recapture reason/instruction from report data ('' if absent).
+    reason = '';
+    instruction = '';
+    if isfield(d, 'recapture')
+        if isfield(d.recapture, 'reasonCode')
+            reason = d.recapture.reasonCode;
+        end
+        if isfield(d.recapture, 'instruction')
+            instruction = d.recapture.instruction;
+        end
+    end
+end
+
+function s = qualityFailuresStr(d)
+%QUALITYFAILURESSTR  Comma-joined quality failure reasons ('n/a' if absent).
+    if isfield(d, 'qualityFailures') && ~isempty(d.qualityFailures)
+        s = strjoin(d.qualityFailures, ', ');
+    else
+        s = 'n/a';
+    end
 end
