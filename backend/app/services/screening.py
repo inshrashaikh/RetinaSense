@@ -116,8 +116,8 @@ def run_screening(
 
     # Run MATLAB adapter
     if adapter is None:
-        from ..services.matlab_adapter import MatlabAdapter
-        adapter = MatlabAdapter()
+        from ..services.matlab_adapter import default_adapter
+        adapter = default_adapter()
 
     meta_dict = database_store.load_metadata(case_id) or {}
     result = adapter.run_pipeline(str(img_path), meta_dict)

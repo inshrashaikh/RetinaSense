@@ -103,6 +103,14 @@ function results = run_all_experiments(varargin)
     % invented.
     logMessage('info', 'run_all_experiments', 'STEP 3/7: fit temperature (val logits)...');
     T = fitCalibration(net, data.val, cfg);   % [] when no val / toolbox n/a
+    if ~isempty(T)
+        saveCalibration(T, chosen);
+        logMessage('info', 'run_all_experiments', ...
+            sprintf('Calibration T=%.3f saved -> %s_calib.mat', T, chosen));
+    else
+        logMessage('warn', 'run_all_experiments', ...
+            'No fitted temperature (validation split unavailable); no _calib.mat persisted (honest skip).');
+    end
 
     % ------------------------- Step 4-7: evaluate ---------------------------
     logMessage('info', 'run_all_experiments', 'STEP 4/7: evaluate hold-out test...');
@@ -113,6 +121,21 @@ function results = run_all_experiments(varargin)
 
     logMessage('info', 'run_all_experiments', 'STEP 6/7: run ablations...');
     ablation = runAblation(net, T);
+
+    % --------------------------- Persist metrics artifact ---------------------
+    % Canonical evaluation metrics -> data/models/<backbone>_metrics.mat (§8).
+    % Only persisted from real module output (runValidation raises unless a
+    % real net + splits exist); saveMetrics validates the contract, so a
+    % placeholder can never be written. If no usable metrics exist, skip
+    % clearly instead of inventing results.
+    if isstruct(validation) && isnumeric(validation.n) && validation.n > 0
+        saveMetrics(validation, chosen);
+        logMessage('info', 'run_all_experiments', ...
+            sprintf('Metrics saved -> %s_metrics.mat', chosen));
+    else
+        logMessage('warn', 'run_all_experiments', ...
+            'No usable validation metrics; no _metrics.mat persisted (honest skip).');
+    end
 
     % --------------------------- Step 7: report ------------------------------
     logMessage('info', 'run_all_experiments', 'STEP 7/7: aggregate report...');

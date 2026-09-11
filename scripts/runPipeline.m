@@ -106,15 +106,37 @@ function c = runPipeline(varargin)
         end
 
         % ---------- Stage 6: DR grading ----------
-        c.grading = classifyImage(c.image, [], cfg.classification);
+        % With mock=true (no trained artifacts) net stays [] and classifyImage
+        % uses its honest mock path. With mock=false a real trained artifact
+        % is loaded (gated by cfg.model.available above) and used for BOTH
+        % grading and Grad-CAM, so real models reach every consumer exactly
+        % once per case.
+        net = [];
+        if ~opts.mock
+            net = loadTrainedModel(cfg);
+            logMessage('info', 'PIPELINE', ...
+                sprintf('Loaded trained model: %s_dr_aptos.mat', cfg.model.backbone));
+        end
+        c.grading = classifyImage(c.image, net, cfg.classification);
         c = addStage(c, 'grading');
 
         % ---------- Stage 7: Explainability ----------
-        c.explain = computeGradCAM(c.image, [], c.grading, c.evidence, cfg.explainability);
+        c.explain = computeGradCAM(c.image, net, c.grading, c.evidence, cfg.explainability);
         c = addStage(c, 'explainability');
 
         % ---------- Stage 8: Calibration + confidence/uncertainty ----------
-        c.calibrated = applyCalibration(c.grading, [], cfg.calibration);
+        % With mock=true, T stays [] and applyCalibration uses the config
+        % identity (cfg.calibration.temperature = 1). With mock=false the
+        % matching fitted temperature is loaded and applied — never the
+        % identity when a real calibration artifact exists; a missing/invalid
+        % artifact raises a structured loadCalibration error.
+        T = [];
+        if ~opts.mock
+            T = loadCalibration(cfg);
+            logMessage('info', 'PIPELINE', ...
+                sprintf('Loaded calibration T=%.3f (%s_calib.mat)', T, cfg.model.backbone));
+        end
+        c.calibrated = applyCalibration(c.grading, T, cfg.calibration);
         c = addStage(c, 'calibration');
 
         % ---------- Stage 9a: Human review ----------

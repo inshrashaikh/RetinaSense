@@ -1,10 +1,11 @@
 /**
- * Report section. Loads the backend report artifact; if the pipeline has not
- * produced one (404 REPORT_UNAVAILABLE), says so honestly.
+ * Report section. Requests the backend report artifact via POST
+ * (idempotent generate); if it cannot be produced yet (no screening run),
+ * says so honestly.
  */
 import { useState } from 'react';
 import type { ReportResponse } from '../api/types';
-import { fetchReport } from '../api/endpoints';
+import { generateReport } from '../api/endpoints';
 import { friendlyError } from '../utils/errors';
 import { LoadingIndicator } from './LoadingIndicator';
 
@@ -17,7 +18,7 @@ export function ReportSection({ caseId }: { caseId: string }) {
     setState('loading');
     setError(null);
     try {
-      const r = await fetchReport(caseId);
+      const r = await generateReport(caseId);
       setReport(r);
       setState('done');
     } catch (err) {
@@ -43,10 +44,9 @@ export function ReportSection({ caseId }: { caseId: string }) {
           <p className="note-text">Case <strong>{report.caseId}</strong></p>
           {report.summary && <p className="report-summary">{report.summary}</p>}
           {report.disclaimer && <p className="note-text">{report.disclaimer}</p>}
-          <p className="note-text">
-            The report artifact lives on the backend filesystem and is not served
-            over HTTP by this prototype, so no download button is offered here.
-          </p>
+          <button type="button" className="btn" onClick={load}>
+            Regenerate report
+          </button>
         </div>
       )}
 

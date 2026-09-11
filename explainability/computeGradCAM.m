@@ -85,7 +85,11 @@ function scoreMap = runGradCAM(net, image, grading, params)
         return;                                                % unsupported type
     end
 
-    im = dlarray(single(imresize(image, [224 224])), 'SSCB');
+    % Match the classifier input size at the config source (same resize that
+    % classification/classifyImage.m applies for prediction), so Grad-CAM and
+    % grading always use one consistent, config-driven size per backbone.
+    inputSize = experiment_config().classification.classify.inputSize(1:2);
+    im = dlarray(single(imresize(image, inputSize)), 'SSCB');
 
     % Class index to explain: the graded class (referable decision class).
     label = grading.grade + 1;

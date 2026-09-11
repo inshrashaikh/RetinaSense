@@ -150,6 +150,45 @@ def test_matlab_unavailable():
     assert exc_info.value.error_code == ErrorCode.MATLAB_ENGINE_UNAVAILABLE
 
 
+# ─── 7b. Screen route -> structured 503 when MATLAB is not available ─────
+
+def test_screen_route_pipeline_unavailable():
+    """The default (real) adapter must FAIL the screening with a structured
+    503 — never fabricate a grade when MATLAB is missing."""
+    case_id = _create_case()
+    resp = client.post(
+        f"/api/cases/{case_id}/screen",
+        files={"image": ("fundus.jpg", b"\xff\xd8" + b"\x00" * 98, "image/jpeg")},
+    )
+    assert resp.status_code == 503
+    body = resp.json()["error"]
+    assert body["code"] == "MATLAB_ENGINE_UNAVAILABLE"
+
+
+# ─── 7c. Simulation mode drives the labelled mock adapter ────────────────
+
+def test_simulation_mode_screens_end_to_end(monkeypatch):
+    """RETINASENSE_SIMULATION=mock -> default adapter is the labelled mock, so
+    the FULL /case -> /screen -> /case flow works without MATLAB."""
+    monkeypatch.setattr(cfg, "SIMULATION_MODE", "mock")
+    case_id = _create_case()
+    resp = client.post(
+        f"/api/cases/{case_id}/screen",
+        files={"image": ("fundus.jpg", b"\xff\xd8" + b"\x00" * 98, "image/jpeg")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["quality"]["class"] == "good"
+    assert body["aiPrediction"]["grade"] == 0
+    # The mock is honest: no explainability is claimed.
+    assert body["explainability"]["gradCamAvailable"] is False
+
+    get_resp = client.get(f"/api/cases/{case_id}")
+    assert get_resp.status_code == 200
+    assert get_resp.json()["status"] == "completed"
+
+
 # ─── 8. Ungradable state ─────────────────────────────────────────────────
 
 def test_ungradable_state():

@@ -7,6 +7,7 @@ from pathlib import Path
 
 # Root directories
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
+REPOSITORY_ROOT = BACKEND_ROOT.parent
 DATA_DIR = BACKEND_ROOT / "data"
 CASES_DIR = DATA_DIR / "cases"
 IMAGES_DIR = DATA_DIR / "images"
@@ -40,7 +41,14 @@ CASE_ID_PREFIX = "RS-2026"
 CASE_ID_WIDTH = 5  # zero-padded digits
 
 # MATLAB integration
-MATLAB_ENGINE_AVAILABLE = False  # set True when MATLAB Runtime/Engine is connected
+# set True when MATLAB Runtime/Engine is connected on this host
+MATLAB_ENGINE_AVAILABLE = bool(os.environ.get("RETINASENSE_MATLAB_ENGINE", "0") == "1")
+
+# Adapter selection.
+#   RETINASENSE_SIMULATION=mock  -> labelled MockMatlabAdapter (demo/CI only,
+#                                   no MATLAB needed; output is never clinical).
+#   unset / anything else        -> real MatlabAdapter (drives runPipeline).
+SIMULATION_MODE = os.environ.get("RETINASENSE_SIMULATION", "off").lower()
 
 # DR grading
 GRADE_LABELS = {
