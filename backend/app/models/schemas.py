@@ -86,6 +86,24 @@ class CreateCaseResponse(BaseModel):
     status: str = "created"
 
 
+class CaseListItem(BaseModel):
+    caseId: str
+    status: str
+    patientId: str = ""
+    eye: str = ""
+    phcId: str = ""
+    createdAt: str | None = None
+
+
+class CaseStats(BaseModel):
+    totalCases: int = 0
+    screeningsCompleted: int = 0
+    pendingReviews: int = 0
+    recaptureRequired: int = 0
+    reviewed: int = 0
+    created: int = 0
+
+
 class CaseResponse(BaseModel):
     caseId: str
     status: str
@@ -121,6 +139,7 @@ class HealthResponse(BaseModel):
     status: str
     matlabEngine: bool
     version: str
+    database: str = "ok"
 
 
 class ErrorResponse(BaseModel):

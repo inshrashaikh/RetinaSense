@@ -22,6 +22,10 @@ assets/*.png
 # Backend local storage — case data, uploaded images, test artifacts.
 backend/data/cases/
 backend/data/images/
+backend/data/retinasense.db
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.sqlite3
 backend/data/
 backend/.pytest_cache/
 backend/__pycache__/
@@ -35,3 +39,8 @@ backend/tests/__pycache__/
 *.mlappinstall
 Thumbs.db
 .DS_Store
+
+# Frontend (React/Vite) — node_modules and build output.
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

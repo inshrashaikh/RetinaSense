@@ -2,6 +2,7 @@
 
 All values are prototype-safe defaults. No secrets, no cloud infra.
 """
+import os
 from pathlib import Path
 
 # Root directories
@@ -9,6 +10,24 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_ROOT / "data"
 CASES_DIR = DATA_DIR / "cases"
 IMAGES_DIR = DATA_DIR / "images"
+
+# SQLite database
+DATABASE_PATH = Path(
+    os.environ.get("RETINASENSE_DATABASE_PATH", str(DATA_DIR / "retinasense.db"))
+).resolve()
+
+# CORS — allow the Vite dev server and preview origins (also overridable).
+_CORS_ENV = os.environ.get("RETINASENSE_CORS_ORIGINS")
+CORS_ORIGINS = (
+    [o.strip() for o in _CORS_ENV.split(",") if o.strip()]
+    if _CORS_ENV
+    else [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    ]
+)
 
 # Image validation
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}

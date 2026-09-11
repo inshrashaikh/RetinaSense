@@ -4,10 +4,13 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, File, Form, UploadFile
+from fastapi.responses import FileResponse
 
 from ..models.schemas import (
+    CaseListItem,
     CaseMeta,
     CaseResponse,
+    CaseStats,
     CreateCaseResponse,
     ReviewAction,
     ReviewResponse,
@@ -17,6 +20,18 @@ from ..services import screening as screening_svc
 from ..services import report as report_svc
 
 router = APIRouter()
+
+
+# ---------- GET /api/cases ----------
+@router.get("/api/cases", response_model=list[CaseListItem])
+def list_cases() -> list[CaseListItem]:
+    return [CaseListItem(**item) for item in screening_svc.list_cases()]
+
+
+# ---------- GET /api/cases/stats ----------
+@router.get("/api/cases/stats", response_model=CaseStats)
+def get_stats() -> CaseStats:
+    return CaseStats(**screening_svc.case_stats())
 
 
 # ---------- POST /api/cases ----------
@@ -160,3 +175,17 @@ def review_case(caseId: str, body: ReviewAction) -> ReviewResponse:
 def get_report(caseId: str) -> ReportResponse:
     result = report_svc.get_report(caseId)
     return ReportResponse(**result)
+
+
+# ---------- POST /api/cases/{caseId}/report ----------
+@router.post("/api/cases/{caseId}/report", response_model=ReportResponse)
+def generate_report(caseId: str) -> ReportResponse:
+    result = report_svc.generate_report(caseId)
+    return ReportResponse(**result)
+
+
+# ---------- GET /api/cases/{caseId}/image ----------
+@router.get("/api/cases/{caseId}/image")
+def get_case_image(caseId: str) -> FileResponse:
+    path = screening_svc.get_case_image(caseId)
+    return FileResponse(path)

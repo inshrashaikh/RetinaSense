@@ -31,7 +31,7 @@ from app.main import app
 from app.models.schemas import CreateCaseResponse
 from app.services.matlab_adapter import MockMatlabAdapter
 from app.services import screening as screening_svc
-from app.storage import local_store
+from app.storage import database_store
 from app.utils.case_id import next_case_id
 
 
@@ -80,8 +80,8 @@ def test_create_case():
     body = resp.json()
     assert body["caseId"].startswith("RS-2026-")
     assert body["status"] == "created"
-    # Verify case dir was created
-    assert (cfg.CASES_DIR / body["caseId"]).exists()
+    # Verify the case was registered in the database
+    assert database_store.case_exists(body["caseId"])
 
 
 # ─── 3. Case retrieval ────────────────────────────────────────────────────
@@ -265,7 +265,7 @@ def test_ai_immutable_after_override():
     _upload_image(case_id)
 
     # Read original AI grade
-    screening_before = local_store.load_screening(case_id)
+    screening_before = database_store.load_screening(case_id)
     original_grade = screening_before["aiPrediction"]["grade"]
     assert original_grade == 0
 
@@ -281,12 +281,12 @@ def test_ai_immutable_after_override():
     )
 
     # AI prediction must NOT have changed
-    screening_after = local_store.load_screening(case_id)
+    screening_after = database_store.load_screening(case_id)
     assert screening_after["aiPrediction"]["grade"] == original_grade
     assert screening_after["aiPrediction"]["grade"] == 0
 
     # The review data stores the override separately
-    review_data = local_store.load_review(case_id)
+    review_data = database_store.load_review(case_id)
     assert review_data["review"]["overrideGrade"] == 3
     assert review_data["finalDecision"]["grade"] == 3
     assert review_data["aiGradeImmutable"] is True
@@ -357,6 +357,44 @@ def test_no_fabricated_medical_output():
     assert body["quality"]["score"] is None
 
 
+# ─── 17. Case list endpoint ───────────────────────────────────────────────
+
+def test_list_cases():
+    case_id = _create_case()
+    resp = client.get("/api/cases")
+    assert resp.status_code == 200
+    items = resp.json()
+    assert isinstance(items, list)
+    assert any(item["caseId"] == case_id for item in items)
+    entry = next(item for item in items if item["caseId"] == case_id)
+    assert entry["status"] == "created"
+    assert entry["patientId"] == "TEST-001"
+
+
+# ─── 18. Case image endpoint ──────────────────────────────────────────────
+
+def test_case_image_available():
+    case_id = _create_case()
+    _upload_image(case_id)
+    resp = client.get(f"/api/cases/{case_id}/image")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/jpeg")
+    assert resp.content
+
+
+def test_case_image_unavailable():
+    case_id = _create_case()
+    resp = client.get(f"/api/cases/{case_id}/image")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "IMAGE_UNAVAILABLE"
+
+
+def test_case_image_not_found():
+    resp = client.get("/api/cases/RS-2026-99999/image")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "CASE_NOT_FOUND"
+
+
 # ─── Extra: invalid review action ─────────────────────────────────────────
 
 def test_invalid_review_action():
@@ -389,3 +427,120 @@ def test_override_without_grade():
     )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "INVALID_REVIEW"
+
+
+# ─── 19. Case stats endpoint ──────────────────────────────────────────────
+
+def test_case_stats_empty():
+    resp = client.get("/api/cases/stats")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["totalCases"] >= 0
+    assert body["screeningsCompleted"] >= 0
+    assert body["pendingReviews"] >= 0
+    assert isinstance(body["totalCases"], int)
+
+
+def test_case_stats_after_creation_and_screening():
+    case_id = _create_case()
+    _upload_image(case_id)
+    resp = client.get("/api/cases/stats")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["totalCases"] >= 1
+    assert body["screeningsCompleted"] >= 1
+
+
+# ─── 20. CORS headers ────────────────────────────────────────────────────
+
+def test_cors_allows_vite_origin():
+    resp = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+# ─── 21. Report generation ────────────────────────────────────────────────
+
+def test_report_generation_after_screening():
+    case_id = _create_case()
+    _upload_image(case_id)
+
+    resp = client.post(f"/api/cases/{case_id}/report")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["caseId"] == case_id
+    assert body["report"] is not None
+    assert body["report"]["quality"]["class"] == "good"
+    assert body["summary"] is not None
+    assert "Screening decision-support" in body["disclaimer"]
+
+    # Verify it can be retrieved via GET
+    resp2 = client.get(f"/api/cases/{case_id}/report")
+    assert resp2.status_code == 200
+    assert resp2.json()["report"]["quality"]["class"] == "good"
+
+
+def test_report_generation_without_screening():
+    case_id = _create_case()
+    resp = client.post(f"/api/cases/{case_id}/report")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "REPORT_UNAVAILABLE"
+
+
+def test_report_generation_not_found():
+    resp = client.post("/api/cases/RS-2026-99999/report")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "CASE_NOT_FOUND"
+
+
+# ─── 22. Health includes database status ──────────────────────────────────
+
+def test_health_database_field():
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.json()["database"] == "ok"
+
+
+# ─── 23. Report after review shows both ──────────────────────────────────
+
+def test_report_after_override_shows_both_grades():
+    case_id = _create_case()
+    _upload_image(case_id)
+    client.post(
+        f"/api/cases/{case_id}/review",
+        json={
+            "action": "override",
+            "reviewerId": "OPH-99",
+            "overrideGrade": 4,
+            "notes": "Confirmed",
+        },
+    )
+    resp = client.post(f"/api/cases/{caseId}/report" if False else f"/api/cases/{case_id}/report")
+    assert resp.status_code == 200
+    body = resp.json()
+    # AI grade is preserved
+    assert body["report"]["aiPrediction"]["grade"] == 0
+    # Final decision is the override
+    assert body["report"]["finalDecision"]["grade"] == 4
+
+
+# ─── 24. Effective status in list_cases ───────────────────────────────────
+
+def test_list_cases_effective_status():
+    # Create + screen + review
+    case_id = _create_case()
+    _upload_image(case_id)
+    client.post(
+        f"/api/cases/{case_id}/review",
+        json={"action": "approve", "reviewerId": "OPH-10", "notes": ""},
+    )
+    resp = client.get("/api/cases")
+    items = resp.json()
+    entry = next(item for item in items if item["caseId"] == case_id)
+    assert entry["status"] == "reviewed"

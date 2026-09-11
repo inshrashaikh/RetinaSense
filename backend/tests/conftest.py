@@ -17,6 +17,7 @@ def _temp_data_dir(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("test_data")
     cases_dir = tmp / "cases"
     images_dir = tmp / "images"
+    db_path = tmp / "retinasense.db"
     cases_dir.mkdir(parents=True, exist_ok=True)
     images_dir.mkdir(parents=True, exist_ok=True)
 
@@ -24,12 +25,19 @@ def _temp_data_dir(tmp_path_factory):
     # patch the module-level attributes so tests never touch real data/.
     cfg.CASES_DIR = cases_dir
     cfg.IMAGES_DIR = images_dir
+    cfg.DATABASE_PATH = db_path
     import app.storage.local_store as local_store
+    import app.storage.database_store as database_store
     import app.utils.case_id as case_id_mod
     local_store.CASES_DIR = cases_dir
     local_store.IMAGES_DIR = images_dir
-    case_id_mod.CASES_DIR = cases_dir
-    case_id_mod._counter = None  # restart ID counter over the temp dir
+    database_store.DATA_DIR = tmp
+    case_id_mod._counter = None  # restart ID counter over the temp database
+
+    from app.db.session import configure_database, init_db
+
+    configure_database(db_path)
+    init_db()
 
     yield tmp
     shutil.rmtree(tmp, ignore_errors=True)

@@ -29,7 +29,7 @@ from ..models.schemas import (
     QualityResult,
 )
 from ..services.matlab_adapter import BaseMatlabAdapter
-from ..storage import local_store
+from ..storage import database_store
 from ..utils.case_id import next_case_id
 from ..utils.errors import ErrorCode, RetinaSenseError
 
@@ -74,9 +74,9 @@ def validate_image(
 def create_case(meta: CaseMeta | None = None) -> str:
     """Create a new case and persist metadata.  Returns caseId."""
     case_id = next_case_id()
-    local_store.create_case_dir(case_id)
+    database_store.create_case_dir(case_id)
     meta_dict = meta.model_dump() if meta else {}
-    local_store.save_metadata(case_id, meta_dict)
+    database_store.save_metadata(case_id, meta_dict)
     return case_id
 
 
@@ -94,7 +94,7 @@ def run_screening(
     Returns the structured screening result dict (not a CaseResponse — the
     caller formats it).
     """
-    if not local_store.case_exists(case_id):
+    if not database_store.case_exists(case_id):
         raise RetinaSenseError(
             ErrorCode.CASE_NOT_FOUND,
             f"Case '{case_id}' not found.",
@@ -108,18 +108,18 @@ def run_screening(
         filename=filename,
         size=len(img_bytes),
     )
-    img_path = local_store.save_image(case_id, filename, img_bytes)
+    img_path = database_store.save_image(case_id, filename, img_bytes)
 
     # Persist metadata if provided
     if metadata:
-        local_store.save_metadata(case_id, metadata.model_dump())
+        database_store.save_metadata(case_id, metadata.model_dump())
 
     # Run MATLAB adapter
     if adapter is None:
         from ..services.matlab_adapter import MatlabAdapter
         adapter = MatlabAdapter()
 
-    meta_dict = local_store.load_metadata(case_id) or {}
+    meta_dict = database_store.load_metadata(case_id) or {}
     result = adapter.run_pipeline(str(img_path), meta_dict)
 
     # Quality gate: early exit for ungradable
@@ -135,7 +135,7 @@ def run_screening(
 
     if quality_class == "ungradable":
         screening["status"] = "recapture_required"
-        local_store.save_screening(case_id, screening)
+        database_store.save_screening(case_id, screening)
         return screening
 
     grading_data = result.get("grading")
@@ -170,17 +170,15 @@ def run_screening(
             "evidencePath": None,
         }
 
-    local_store.save_screening(case_id, screening)
+    database_store.save_screening(case_id, screening)
     return screening
 
 
 def get_case(case_id: str) -> dict[str, Any] | None:
     """Load all stored data for a case and build the full response dict."""
-    all_data = local_store.load_all(case_id)
+    all_data = database_store.load_all(case_id)
     if all_data is None:
         return None
-
-    meta = all_data.get("metadata", {})
     screening = all_data.get("screening", {})
     review_data = all_data.get("review")
     report_data = all_data.get("report")
@@ -220,7 +218,7 @@ def submit_review(
 
     AI prediction is NEVER overwritten.  Review is stored separately.
     """
-    if not local_store.case_exists(case_id):
+    if not database_store.case_exists(case_id):
         raise RetinaSenseError(
             ErrorCode.CASE_NOT_FOUND,
             f"Case '{case_id}' not found.",
@@ -243,7 +241,7 @@ def submit_review(
         )
 
     # Load existing screening to get AI grade for immutability checks
-    screening = local_store.load_screening(case_id) or {}
+    screening = database_store.load_screening(case_id) or {}
     ai_pred = screening.get("aiPrediction")
     ai_grade = ai_pred.get("grade") if ai_pred else None
 
@@ -277,7 +275,7 @@ def submit_review(
         "referral": referral,
     }
 
-    local_store.save_review(case_id, {
+    database_store.save_review(case_id, {
         "review": review_entry,
         "finalDecision": final_decision,
         "aiGradeImmutable": True,
@@ -288,3 +286,35 @@ def submit_review(
         "review": review_entry,
         "finalDecision": final_decision,
     }
+
+
+def list_cases() -> list[dict[str, Any]]:
+    """Return all stored cases (most recently created first)."""
+    return database_store.list_cases()
+
+
+def case_stats() -> dict[str, Any]:
+    """Aggregate counts for the dashboard stat cards."""
+    return database_store.case_stats()
+
+
+def get_case_image(case_id: str) -> Path:
+    """Resolve the stored fundus image path for a case.
+
+    Raises CASE_NOT_FOUND if the case does not exist and IMAGE_UNAVAILABLE
+    if the case has no image on disk.
+    """
+    if not database_store.case_exists(case_id):
+        raise RetinaSenseError(
+            ErrorCode.CASE_NOT_FOUND,
+            f"Case '{case_id}' not found.",
+            stage="storage",
+        )
+    path = database_store.load_image_path(case_id)
+    if path is None:
+        raise RetinaSenseError(
+            ErrorCode.IMAGE_UNAVAILABLE,
+            f"No fundus image is stored for case '{case_id}'.",
+            stage="storage",
+        )
+    return path
