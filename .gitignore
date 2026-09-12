@@ -14,6 +14,10 @@ __pycache__/
 *.pyc
 tools/python_verifier/output/
 
+# Backend runtime + local virtualenv (no committed data, no committed deps).
+backend/.venv/
+backend/data/
+
 # Demo image assets may be large (keep the small committed synthetic demo).
 assets/*.jpg
 assets/*.png
@@ -24,3 +28,4 @@ assets/*.png
 *.mlappinstall
 Thumbs.db
 .DS_Store
+node_modules
