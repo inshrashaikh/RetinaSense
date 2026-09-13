@@ -600,6 +600,29 @@ hr {
   gap: 0;
 }
 
+/*
+ * Flush variants used by the dashboard's embedded table and worklists. The
+ * inner table/list carries its own row spacing, so the surface stays
+ * edge-to-edge like every other table page while the row content keeps the
+ * card's horizontal inset.
+ */
+.card__body--flush-table {
+  padding: 0;
+  gap: 0;
+}
+
+.card__body--flush-list {
+  padding: 0;
+  gap: 0;
+}
+.card__body--flush-list .data-list {
+  padding: var(--rs-space-2) 0;
+}
+.card__body--flush-list .data-list__item {
+  padding-left: var(--rs-space-5);
+  padding-right: var(--rs-space-5);
+}
+
 .card__footer {
   padding: var(--rs-space-4) var(--rs-space-5);
   border-top: 1px solid var(--rs-border-soft);
