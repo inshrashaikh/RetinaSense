@@ -11,7 +11,6 @@ const api = vi.hoisted(() => ({
   getCase: vi.fn(),
   listCases: vi.fn(async () => []),
   fetchCaseImage: vi.fn(async () => new Blob()),
-  fetchCaseArtifact: vi.fn(async () => new Blob()),
   submitReview: vi.fn(),
   fetchReport: vi.fn(),
   fetchHealth: vi.fn(),
@@ -24,7 +23,6 @@ vi.mock('../src/api/endpoints', () => ({
   getCase: api.getCase,
   listCases: api.listCases,
   fetchCaseImage: api.fetchCaseImage,
-  fetchCaseArtifact: api.fetchCaseArtifact,
   submitReview: api.submitReview,
   fetchReport: api.fetchReport,
   fetchHealth: api.fetchHealth,
@@ -109,64 +107,5 @@ describe('CaseViewPage — quality gate gates', () => {
     api.getCase.mockResolvedValue(goodCase);
     render(<CaseViewPage caseId="RS-RESULT-1" />);
     expect(await screen.findByRole('button', { name: 'Load report' })).toBeInTheDocument();
-  });
-});
-
-describe('CaseViewPage — real explainability artifacts', () => {
-  it('renders the backend-served Grad-CAM and evidence images with honest labels', async () => {
-    api.getCase.mockResolvedValue({
-      ...goodCase,
-      explainability: {
-        gradCamAvailable: true,
-        gradCamPath: '/api/cases/RS-RESULT-1/artifacts/gradcam',
-        evidenceAvailable: true,
-        evidencePath: '/api/cases/RS-RESULT-1/artifacts/evidence',
-      },
-    });
-
-    render(<CaseViewPage caseId="RS-RESULT-1" />);
-
-    expect(await screen.findByAltText(/Grad-CAM attention overlay/i)).toBeInTheDocument();
-    expect(screen.getByAltText(/independent retinal lesion-evidence overlay/i)).toBeInTheDocument();
-    // Distinction preserved: attention is not proof of causality.
-    expect(screen.getByText(/NOT proof of causality/i)).toBeInTheDocument();
-    // Evidence is advisory only and never affects grade/referral.
-    expect(screen.getByText(/advisory only/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Evidence unavailable/i)).not.toBeInTheDocument();
-  });
-
-  it('shows a clear unavailable state rather than a broken image when serving fails', async () => {
-    api.getCase.mockResolvedValue({
-      ...goodCase,
-      explainability: {
-        gradCamAvailable: true,
-        gradCamPath: '/api/cases/RS-RESULT-1/artifacts/gradcam',
-        evidenceAvailable: false,
-        evidencePath: null,
-      },
-    });
-    api.fetchCaseArtifact.mockRejectedValue({
-      kind: 'http',
-      code: 'ARTIFACT_UNAVAILABLE',
-      message: 'No gradcam artifact is stored for this case.',
-      httpStatus: 404,
-    });
-
-    render(<CaseViewPage caseId="RS-RESULT-1" />);
-
-    expect(await screen.findByText(/Grad-CAM attention unavailable/i)).toBeInTheDocument();
-    // No broken <img> for the missing artifact.
-    expect(screen.queryByAltText(/Grad-CAM attention overlay/i)).not.toBeInTheDocument();
-  });
-
-  it('stays honest when the backend reports no artifacts at all', async () => {
-    api.getCase.mockResolvedValue(goodCase); // gradCamAvailable=false, paths null
-
-    render(<CaseViewPage caseId="RS-RESULT-1" />);
-
-    expect(await screen.findByText(/Evidence unavailable/i)).toBeInTheDocument();
-    expect(screen.queryByAltText(/Grad-CAM attention overlay/i)).not.toBeInTheDocument();
-    expect(screen.queryByAltText(/evidence overlay/i)).not.toBeInTheDocument();
-    expect(api.fetchCaseArtifact).not.toHaveBeenCalled();
   });
 });

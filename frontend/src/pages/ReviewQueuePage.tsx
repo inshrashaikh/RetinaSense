@@ -1,111 +1,187 @@
 /**
- * Review queue — cases whose screening completed but no human decision was
+ * Review queue — cases whose screening completed but no human decision has been
  * recorded yet. The ophthalmologist reviews each case from its case page.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { listCases } from '../api/endpoints';
-import type { CaseListItem } from '../api/types';
-import { ErrorBanner } from '../components/ErrorBanner';
+import { useMemo, useState } from 'react';
+import { useCaseList, isAwaitingReview } from '../hooks/useCaseList';
+import { formatDate, statusLabel, statusTone } from '../utils/format';
+import { Alert } from '../components/ui/Alert';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Card, CardBody, CardHeader } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SearchInput } from '../components/ui/Form';
+import { PageHeader } from '../components/ui/PageHeader';
+import { SkeletonRows } from '../components/ui/Skeleton';
+import { StatCard } from '../components/ui/StatCard';
 import { StatusPill } from '../components/StatusPill';
 import { navigate } from '../router';
-import { friendlyError } from '../utils/errors';
-import { statusTone, statusLabel } from '../utils/format';
-import { formatDate } from './CasesPage';
-
-type ListState = 'loading' | 'done' | 'error';
 
 export function ReviewQueuePage() {
-  const [state, setState] = useState<ListState>('loading');
-  const [pending, setPending] = useState<CaseListItem[]>([]);
-  const [reviewedCount, setReviewedCount] = useState(0);
-  const [error, setError] = useState<{ title: string; detail: string } | null>(null);
+  const { state, cases, error, reload } = useCaseList();
+  const [query, setQuery] = useState('');
 
-  const load = useCallback(async () => {
-    setState('loading');
-    setError(null);
-    try {
-      const items = await listCases();
-      setPending(items.filter((c) => c.status === 'completed'));
-      setReviewedCount(items.filter((c) => c.status === 'reviewed').length);
-      setState('done');
-    } catch (err) {
-      setError(friendlyError(err));
-      setState('error');
-    }
-  }, []);
+  const pending = useMemo(() => cases.filter(isAwaitingReview), [cases]);
+  const reviewedCount = useMemo(
+    () => cases.filter((c) => c.status === 'reviewed').length,
+    [cases],
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return pending;
+    return pending.filter(
+      (c) =>
+        c.caseId.toLowerCase().includes(q) ||
+        c.patientId.toLowerCase().includes(q) ||
+        c.phcId.toLowerCase().includes(q),
+    );
+  }, [pending, query]);
 
   return (
     <div className="page">
-      <h1>Human review</h1>
-      <p className="page-intro">
-        Cases below have an AI result and are waiting for an ophthalmologist's
-        decision (approve / override / recapture). The AI result is immutable — the
-        review is recorded separately as the final decision.
-      </p>
+      <PageHeader
+        eyebrow="Human in the loop"
+        title="Review queue"
+        subtitle="Cases below have an AI result and are waiting for an ophthalmologist's
+          decision (approve / override / recapture). The AI result is immutable — the
+          review is recorded separately as the final decision."
+        actions={
+          <Button icon="refresh" onClick={reload}>
+            Refresh queue
+          </Button>
+        }
+      />
 
-      {error && <ErrorBanner title={error.title} detail={error.detail} />}
+      {error && <Alert variant="error" title={error.title}>{error.detail}</Alert>}
 
-      {state === 'done' && reviewedCount > 0 && (
-        <p className="note-text">{reviewedCount} case(s) already reviewed.</p>
-      )}
+      <div className="grid-2">
+        <StatCard
+          label="Awaiting review"
+          value={state === 'done' ? pending.length : '—'}
+          note="Screened cases without a decision"
+          icon="inbox"
+          tone="info"
+        />
+        <StatCard
+          label="Review completed"
+          value={state === 'done' ? reviewedCount : '—'}
+          note="Cases with a recorded human decision"
+          icon="userCheck"
+          tone="good"
+        />
+      </div>
 
-      {state === 'done' && pending.length === 0 && (
-        <section className="panel">
-          <h2 className="panel-title">Nothing to review</h2>
-          <p className="empty-note">
-            No completed screening is waiting for a human decision. Cases appear here
-            after the quality gate and AI grading finish.
-          </p>
-        </section>
-      )}
+      <Card>
+        <CardHeader
+          title="Waiting for a decision"
+          subtitle="Oldest reviewed first when processing the list top-down"
+          icon="clipboard"
+          bordered
+          actions={<Badge tone="info" icon="clock">{filtered.length} pending</Badge>}
+        />
 
-      {state === 'done' && pending.length > 0 && (
-        <section className="panel" aria-label="Review queue">
-          <table className="case-table">
-            <thead>
-              <tr>
-                <th>Case</th>
-                <th>Status</th>
-                <th>Eye</th>
-                <th>Created</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((c) => (
-                <tr key={c.caseId}>
-                  <td>{c.caseId}</td>
-                  <td>
-                    <StatusPill tone={statusTone(c.status)} label={statusLabel(c.status)} />
-                  </td>
-                  <td className="muted">{c.eye || '—'}</td>
-                  <td className="muted">{formatDate(c.createdAt)}</td>
-                  <td>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/case/${c.caseId}`)}>
-                      Review
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+        {state === 'loading' && <SkeletonRows rows={4} />}
 
-      {state === 'error' && (
-        <section className="panel">
-          <p className="empty-note">
-            The review queue could not be loaded while the backend is unreachable.
-          </p>
-          <button type="button" className="btn" onClick={() => void load()}>
-            Try again
-          </button>
-        </section>
-      )}
+        {state === 'error' && (
+          <CardBody>
+            <Alert variant="error" title="Review queue unavailable">
+              {error?.detail ??
+                'The review queue could not be loaded while the backend is unreachable.'}
+            </Alert>
+            <div className="btn-row">
+              <Button size="sm" icon="refresh" onClick={reload}>
+                Try again
+              </Button>
+            </div>
+          </CardBody>
+        )}
+
+        {state === 'done' && pending.length === 0 && (
+          <CardBody>
+            <EmptyState
+              icon="checkCircle"
+              title="Nothing to review"
+              action={
+                <Button icon="layers" onClick={() => navigate('/cases')}>
+                  Browse all cases
+                </Button>
+              }
+            >
+              No completed screening is waiting for a human decision. Cases appear here
+              after the quality gate and AI grading finish.
+            </EmptyState>
+          </CardBody>
+        )}
+
+        {state === 'done' && pending.length > 0 && (
+          <>
+            <CardBody>
+              <div className="toolbar">
+                <SearchInput
+                  label="Search review queue"
+                  placeholder="Search by case id, patient token or PHC…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            </CardBody>
+
+            {filtered.length === 0 ? (
+              <CardBody>
+                <EmptyState icon="search" title="No pending cases match this search">
+                  Clear the search to see every case waiting for a decision.
+                </EmptyState>
+              </CardBody>
+            ) : (
+              <CardBody className="card__body--flush">
+                <div className="table-wrap">
+                  <table className="table table--stack">
+                    <thead>
+                      <tr>
+                        <th>Case</th>
+                        <th>Status</th>
+                        <th>Eye</th>
+                        <th>Created</th>
+                        <th className="table__cell-actions">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((c) => (
+                        <tr key={c.caseId}>
+                          <td data-label="Case" className="table__cell-strong">
+                            {c.caseId}
+                          </td>
+                          <td data-label="Status">
+                            <StatusPill tone={statusTone(c.status)} label={statusLabel(c.status)} />
+                          </td>
+                          <td data-label="Eye" className="muted">
+                            {c.eye || '—'}
+                          </td>
+                          <td data-label="Created" className="muted">
+                            {formatDate(c.createdAt)}
+                          </td>
+                          <td data-label="" className="table__cell-actions">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => navigate(`/case/${c.caseId}`)}
+                            >
+                              Review
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardBody>
+            )}
+          </>
+        )}
+      </Card>
     </div>
   );
 }

@@ -1,11 +1,13 @@
 /**
- * Error banner with role="alert" so screen readers announce it.
+ * Error banner — a thin, honest wrapper over the Alert primitive so every
+ * failure state in the app looks and announces the same way.
  */
+import { Alert } from './ui/Alert';
+
 export function ErrorBanner({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="error-banner" role="alert">
-      <h3 className="error-banner-title">{title}</h3>
-      <p className="error-banner-detail">{detail}</p>
-    </div>
+    <Alert variant="error" title={title}>
+      {detail}
+    </Alert>
   );
 }

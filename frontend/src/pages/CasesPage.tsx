@@ -1,167 +1,221 @@
 /**
- * Cases page — full list of all cases from the backend, newest first.
+ * Cases — the full case list, searchable and filterable.
  * Every value comes from GET /api/cases (single source of truth: backend DB).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listCases } from '../api/endpoints';
-import type { CaseListItem } from '../api/types';
-import { ErrorBanner } from '../components/ErrorBanner';
+import { useMemo, useState } from 'react';
+import { useCaseList } from '../hooks/useCaseList';
+import { formatDate, statusLabel, statusTone } from '../utils/format';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { Card, CardBody, CardHeader } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SearchInput, Select } from '../components/ui/Form';
+import { PageHeader } from '../components/ui/PageHeader';
+import { SkeletonRows } from '../components/ui/Skeleton';
 import { StatusPill } from '../components/StatusPill';
 import { navigate } from '../router';
-import { friendlyError } from '../utils/errors';
-import { statusTone, statusLabel } from '../utils/format';
 
-type ListState = 'loading' | 'done' | 'error';
-type CaseFilter = 'all' | 'referable' | 'pending' | 'recapture';
-
-const FILTER_LABELS: Record<CaseFilter, string> = {
-  all: 'All',
-  referable: 'Referable',
-  pending: 'Pending review',
-  recapture: 'Recapture needed',
-};
+/**
+ * Filter labels deliberately differ from the status badge wording so a row
+ * status is never confused with a filter option.
+ */
+const STATUS_FILTERS = [
+  { value: '', label: 'All statuses' },
+  { value: 'created', label: 'Awaiting screening' },
+  { value: 'completed', label: 'Awaiting review' },
+  { value: 'reviewed', label: 'Review completed' },
+  { value: 'recapture_required', label: 'Needs recapture' },
+];
 
 export function CasesPage() {
-  const [state, setState] = useState<ListState>('loading');
-  const [cases, setCases] = useState<CaseListItem[]>([]);
-  const [error, setError] = useState<{ title: string; detail: string } | null>(null);
-  const [filter, setFilter] = useState<CaseFilter>('all');
+  const { state, cases, error, reload } = useCaseList();
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
 
-  const load = useCallback(async () => {
-    setState('loading');
-    setError(null);
-    try {
-      const items = await listCases();
-      setCases(items);
-      setState('done');
-    } catch (err) {
-      setError(friendlyError(err));
-      setState('error');
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const filtered = useMemo<CaseListItem[]>(() => {
-    if (filter === 'all') return cases;
-    if (filter === 'referable') return cases.filter((c) => c.referable === true);
-    if (filter === 'pending') return cases.filter((c) => c.status === 'completed');
-    return cases.filter((c) => c.status === 'recapture_required');
-  }, [cases, filter]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return cases.filter((c) => {
+      if (status && c.status !== status) return false;
+      if (!q) return true;
+      return (
+        c.caseId.toLowerCase().includes(q) ||
+        c.patientId.toLowerCase().includes(q) ||
+        c.phcId.toLowerCase().includes(q)
+      );
+    });
+  }, [cases, query, status]);
 
   return (
     <div className="page">
-      <div className="page-head-row">
-        <div>
-          <h1>Cases</h1>
-          <p className="page-intro">
-            Every screening case stored on the backend. Open a case to see its
-            result, complete the human review, or generate its report.
-          </p>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={() => navigate('/screening')}>
-          New screening
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Case management"
+        title="Cases"
+        subtitle="Every screening case stored on the backend. Open a case to see its
+          result, complete the human review, or generate its report."
+        actions={
+          <>
+            <Button icon="clipboard" onClick={() => navigate('/cases/new')}>
+              Create case
+            </Button>
+            <Button variant="primary" icon="plus" onClick={() => navigate('/screening')}>
+              New screening
+            </Button>
+          </>
+        }
+      />
 
-      {error && <ErrorBanner title={error.title} detail={error.detail} />}
+      {error && <Alert variant="error" title={error.title}>{error.detail}</Alert>}
 
-      {state === 'done' && (
-        <div className="filter-tabs" role="tablist" aria-label="Filter cases">
-          {(Object.keys(FILTER_LABELS) as CaseFilter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="tab"
-              aria-selected={filter === f}
-              className={`filter-tab${filter === f ? ' filter-tab-active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {FILTER_LABELS[f]}
-            </button>
-          ))}
-        </div>
-      )}
+      <Card>
+        <CardHeader
+          title="All cases"
+          subtitle={
+            state === 'done'
+              ? `${filtered.length} of ${cases.length} case${cases.length === 1 ? '' : 's'} shown`
+              : 'Loading the case list from the backend'
+          }
+          icon="layers"
+          bordered
+          actions={
+            <Button size="sm" icon="refresh" onClick={reload}>
+              Refresh
+            </Button>
+          }
+        />
 
-      {state === 'done' && filtered.length === 0 && (
-        <section className="panel">
-          <h2 className="panel-title">No cases yet</h2>
-          <p className="empty-note">
-            {filter === 'all'
-              ? 'No screenings have been run. Create the first case with “New screening”.'
-              : `No cases match the “${FILTER_LABELS[filter]}” filter.`}
-          </p>
-        </section>
-      )}
+        {state === 'loading' && <SkeletonRows rows={5} />}
 
-      {state === 'done' && filtered.length > 0 && (
-        <section className="panel" aria-label="Case list">
-          <table className="case-table">
-            <thead>
-              <tr>
-                <th>Case</th>
-                <th>Status</th>
-                <th>Eye</th>
-                <th>PHC</th>
-                <th>Referable</th>
-                <th>Created</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr key={c.caseId}>
-                  <td>
-                    <button type="button" className="link-btn" onClick={() => navigate(`/case/${c.caseId}`)}>
-                      {c.caseId}
-                    </button>
-                  </td>
-                  <td>
-                    <StatusPill tone={statusTone(c.status)} label={statusLabel(c.status)} />
-                  </td>
-                  <td className="muted">{c.eye || '—'}</td>
-                  <td className="muted">{c.phcId || '—'}</td>
-                  <td className="muted">
-                    {c.referable === null || c.referable === undefined ? (
-                      '—'
-                    ) : c.referable ? (
-                      <StatusPill tone="bad" label="Referable" />
-                    ) : (
-                      <StatusPill tone="good" label="Non-referable" />
-                    )}
-                  </td>
-                  <td className="muted">{c.createdAt ? formatDate(c.createdAt) : '—'}</td>
-                  <td>
-                    <button type="button" className="btn btn-sm" onClick={() => navigate(`/case/${c.caseId}`)}>
-                      Open
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+        {state === 'error' && (
+          <CardBody>
+            <Alert variant="error" title="Cases could not be loaded">
+              {error?.detail ??
+                'Cases could not be loaded. No list is assumed while the backend is unreachable.'}
+            </Alert>
+            <div className="btn-row">
+              <Button size="sm" icon="refresh" onClick={reload}>
+                Try again
+              </Button>
+            </div>
+          </CardBody>
+        )}
 
-      {state === 'error' && (
-        <section className="panel">
-          <p className="empty-note">
-            Cases could not be loaded. No list is assumed while the backend is unreachable.
-          </p>
-          <button type="button" className="btn" onClick={() => void load()}>
-            Try again
-          </button>
-        </section>
-      )}
+        {state === 'done' && (
+          <>
+            <CardBody>
+              <div className="toolbar">
+                <SearchInput
+                  label="Search cases"
+                  placeholder="Search by case id, patient token or PHC…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <Select
+                  aria-label="Filter by status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                >
+                  {STATUS_FILTERS.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </Select>
+                {(query || status) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon="x"
+                    onClick={() => {
+                      setQuery('');
+                      setStatus('');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            </CardBody>
+
+            {cases.length === 0 && (
+              <CardBody>
+                <EmptyState
+                  icon="layers"
+                  title="No cases yet"
+                  action={
+                    <Button variant="primary" icon="plus" onClick={() => navigate('/screening')}>
+                      New screening
+                    </Button>
+                  }
+                >
+                  No screenings have been run. Create the first case with “New
+                  screening”, or register a case first and upload the image afterwards.
+                </EmptyState>
+              </CardBody>
+            )}
+
+            {cases.length > 0 && filtered.length === 0 && (
+              <CardBody>
+                <EmptyState icon="search" title="No cases match these filters">
+                  Try a different search term or reset the status filter.
+                </EmptyState>
+              </CardBody>
+            )}
+
+            {filtered.length > 0 && (
+              <CardBody className="card__body--flush">
+                <div className="table-wrap">
+                  <table className="table table--stack">
+                    <thead>
+                      <tr>
+                        <th>Case</th>
+                        <th>Status</th>
+                        <th>Eye</th>
+                        <th>PHC</th>
+                        <th>Created</th>
+                        <th className="table__cell-actions">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((c) => (
+                        <tr key={c.caseId}>
+                          <td data-label="Case" className="table__cell-strong">
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => navigate(`/case/${c.caseId}`)}
+                            >
+                              {c.caseId}
+                            </button>
+                          </td>
+                          <td data-label="Status">
+                            <StatusPill tone={statusTone(c.status)} label={statusLabel(c.status)} />
+                          </td>
+                          <td data-label="Eye" className="muted">
+                            {c.eye || '—'}
+                          </td>
+                          <td data-label="PHC" className="muted">
+                            {c.phcId || '—'}
+                          </td>
+                          <td data-label="Created" className="muted">
+                            {formatDate(c.createdAt)}
+                          </td>
+                          <td data-label="" className="table__cell-actions">
+                            <Button size="sm" onClick={() => navigate(`/case/${c.caseId}`)}>
+                              Open
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardBody>
+            )}
+          </>
+        )}
+      </Card>
     </div>
   );
-}
-
-export function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }

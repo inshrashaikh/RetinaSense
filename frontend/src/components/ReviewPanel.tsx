@@ -9,6 +9,11 @@ import { useState } from 'react';
 import type { AiPrediction, ReviewResponse } from '../api/types';
 import { submitReview } from '../api/endpoints';
 import { friendlyError } from '../utils/errors';
+import { Button } from './ui/Button';
+import { Card, CardBody, CardHeader } from './ui/Card';
+import { Field, Input, Select, Textarea } from './ui/Form';
+import { Badge } from './ui/Badge';
+import { Alert } from './ui/Alert';
 
 type Action = 'approve' | 'override' | 'recapture';
 
@@ -19,29 +24,44 @@ interface Props {
   onError: (title: string, detail: string) => void;
 }
 
+const ACTIONS: { value: Action; label: string; hint: string }[] = [
+  { value: 'approve', label: 'Approve grade', hint: 'Accept the AI grade as the final grade.' },
+  { value: 'override', label: 'Override grade', hint: 'Record a different final DR grade.' },
+  { value: 'recapture', label: 'Request recapture', hint: 'No reliable grade — take a new image.' },
+];
+
 export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
   const [action, setAction] = useState<Action>('approve');
   const [overrideGrade, setOverrideGrade] = useState<number>(2);
   const [reviewerId, setReviewerId] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reviewerError, setReviewerError] = useState('');
 
   if (!ai || ai.grade === null) {
     return (
-      <section className="panel" aria-label="Human review">
-        <h2 className="panel-title">Human review</h2>
-        <p className="empty-note">
-          No AI grade exists for this image, so a review is not applicable.
-          {ai && ai.reviewRequired ? ' Review is recorded as required at the backend.' : ''}
-        </p>
-      </section>
+      <Card aria-label="Human review">
+        <CardHeader
+          title="Human review"
+          subtitle="Not applicable for this case"
+          icon="userCheck"
+          bordered
+        />
+        <CardBody>
+          <p className="note-text">
+            No AI grade exists for this image, so a review is not applicable.
+            {ai && ai.reviewRequired ? ' Review is recorded as required at the backend.' : ''}
+          </p>
+        </CardBody>
+      </Card>
     );
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setReviewerError('');
     if (!reviewerId.trim()) {
-      onError('Reviewer ID required', 'Please enter the reviewer (ophthalmologist) ID before submitting.');
+      setReviewerError('Enter the reviewer (ophthalmologist) ID before submitting.');
       return;
     }
     setBusy(true);
@@ -62,76 +82,89 @@ export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
   }
 
   return (
-    <section className="panel" aria-label="Human review">
-      <h2 className="panel-title">Human review</h2>
+    <Card aria-label="Human review">
+      <CardHeader
+        title="Human review"
+        subtitle="Recorded separately from the AI result"
+        icon="userCheck"
+        bordered
+        actions={
+          <Badge tone="info" icon="spark">
+            AI grade {ai.grade} ({ai.gradeLabel})
+          </Badge>
+        }
+      />
+      <CardBody>
+        <Alert variant="info" title="How this is recorded" role="note">
+          The AI result is preserved verbatim; your decision below is stored separately as
+          the final decision for this case.
+        </Alert>
 
-      <p className="note-text">
-        AI grade is <strong>{ai.grade} ({ai.gradeLabel})</strong>. The AI result is
-        preserved verbatim; your decision below is recorded separately as the final decision.
-      </p>
+        <form className="form" onSubmit={onSubmit} aria-label="Human review form">
+          <fieldset className="fieldset">
+            <legend className="fieldset__legend">Action</legend>
+            {ACTIONS.map((option) => (
+              <label className="radio-line" key={option.value}>
+                <input
+                  type="radio"
+                  name="action"
+                  value={option.value}
+                  aria-label={option.label}
+                  checked={action === option.value}
+                  onChange={() => setAction(option.value)}
+                />
+                <span className="radio-line__text">
+                  <span>{option.label}</span>
+                  <span className="radio-line__hint">{option.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
 
-      <form onSubmit={onSubmit}>
-        <fieldset className="fieldset">
-          <legend>Action</legend>
-          <label className="radio-line">
-            <input type="radio" name="action" value="approve" checked={action === 'approve'}
-              onChange={() => setAction('approve')} />
-            Approve AI result
-          </label>
-          <label className="radio-line">
-            <input type="radio" name="action" value="override" checked={action === 'override'}
-              onChange={() => setAction('override')} />
-            Override grade
-          </label>
-          <label className="radio-line">
-            <input type="radio" name="action" value="recapture" checked={action === 'recapture'}
-              onChange={() => setAction('recapture')} />
-            Request recapture
-          </label>
-        </fieldset>
+          {action === 'override' && (
+            <Field label="Override DR grade">
+              <Select
+                value={overrideGrade}
+                onChange={(e) => setOverrideGrade(Number(e.target.value))}
+              >
+                {[0, 1, 2, 3, 4].map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
 
-        {action === 'override' && (
-          <label className="field">
-            <span className="field-label">Override DR grade</span>
-            <select
-              value={overrideGrade}
-              onChange={(e) => setOverrideGrade(Number(e.target.value))}
-              aria-label="Override DR grade"
-            >
-              {[0, 1, 2, 3, 4].map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+          <Field
+            label="Reviewer (ophthalmologist) ID"
+            error={reviewerError || undefined}
+          >
+            <Input
+              type="text"
+              value={reviewerId}
+              onChange={(e) => setReviewerId(e.target.value)}
+              placeholder="e.g. OPH-2"
+              autoComplete="off"
+            />
+          </Field>
 
-        <label className="field">
-          <span className="field-label">Reviewer (ophthalmologist) ID</span>
-          <input
-            type="text"
-            value={reviewerId}
-            onChange={(e) => setReviewerId(e.target.value)}
-            placeholder="e.g. OPH-2"
-            autoComplete="off"
-          />
-        </label>
+          <Field label="Notes">
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes…"
+            />
+          </Field>
 
-        <label className="field">
-          <span className="field-label">Notes</span>
-          <textarea
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional notes…"
-          />
-        </label>
-
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? 'Submitting review…' : 'Submit review'}
-        </button>
-      </form>
-    </section>
+          <div className="btn-row">
+            <Button type="submit" variant="primary" icon="check" loading={busy}>
+              {busy ? 'Submitting review…' : 'Submit review'}
+            </Button>
+          </div>
+        </form>
+      </CardBody>
+    </Card>
   );
 }

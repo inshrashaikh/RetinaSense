@@ -1,22 +1,33 @@
 /**
- * Status pill — text + color, never color alone.
+ * StatusPill — status presentation for cases and clinical states.
+ *
+ * Text + icon + colour, never colour alone.
  */
 import type { ReactNode } from 'react';
+import { Badge } from './ui/Badge';
+import type { IconName } from './ui/Icon';
+import type { StatusTone } from '../utils/format';
 
-type Tone = 'good' | 'warn' | 'bad' | 'neutral' | 'info';
-
-const TONES: Record<Tone, { className: string }> = {
-  good: { className: 'pill pill-good' },
-  warn: { className: 'pill pill-warn' },
-  bad: { className: 'pill pill-bad' },
-  neutral: { className: 'pill pill-neutral' },
-  info: { className: 'pill pill-info' },
+const DEFAULT_ICON: Record<StatusTone, IconName | undefined> = {
+  good: 'checkCircle',
+  warn: 'alert',
+  bad: 'xCircle',
+  info: 'info',
+  neutral: undefined,
 };
 
-export function StatusPill({ tone, label }: { tone: Tone; label: ReactNode }) {
+export function StatusPill({
+  tone,
+  label,
+  icon,
+}: {
+  tone: StatusTone;
+  label: ReactNode;
+  icon?: IconName;
+}) {
   return (
-    <span className={TONES[tone].className} data-tone={tone}>
+    <Badge tone={tone} icon={icon ?? DEFAULT_ICON[tone]}>
       {label}
-    </span>
+    </Badge>
   );
 }

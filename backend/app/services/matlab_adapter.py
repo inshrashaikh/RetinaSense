@@ -11,9 +11,7 @@ resulting Case is mapped field-by-field onto the API response shape; nothing is
 invented and every medical value comes straight from the MATLAB module output.
 If MATLAB (or the trained artifacts) is missing, a structured
 MATLAB_ENGINE_UNAVAILABLE / MODEL_UNAVAILABLE error is raised — never a
-fabricated result.  Input-data failures in the ingest stage (undecodable /
-non-RGB uploads) map to a 400 INVALID_IMAGE error; the pipeline never invents
-a screening for them.
+fabricated result.
 
 Demo/CI path (MockMatlabAdapter): TEST-ONLY.  Returns deterministic honest
 placeholder values mirroring the MATLAB mock pipeline's ``mock=true`` mode, is
@@ -27,8 +25,6 @@ from __future__ import annotations
 import abc
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 from ..config import MATLAB_ENGINE_AVAILABLE, REPOSITORY_ROOT
 from ..models.schemas import (
@@ -86,7 +82,8 @@ class MatlabAdapter(BaseMatlabAdapter):
 
             self._engine = matlab.engine.start_matlab()
             root = Path(self._scripts_dir or REPOSITORY_ROOT)
-            self._engine.addpath(self._engine.genpath(str(root)), nargout=0)
+            self._engine.addpath(str(root), nargout=0)
+            self._engine.addpath(genpath=str(root), nargout=0)
             return self._engine
         except Exception as exc:  # pragma: no cover - host-specific
             raise RetinaSenseError(
@@ -113,7 +110,6 @@ class MatlabAdapter(BaseMatlabAdapter):
                 False,
                 nargout=1,
             )
-            artifacts = _extract_explain_artifacts(case_raw)
             case = _to_py(case_raw)
         except RetinaSenseError:
             raise
@@ -126,12 +122,6 @@ class MatlabAdapter(BaseMatlabAdapter):
                     "Run scripts/benchmark_backbones.m + run_all_experiments.m on a "
                     "MATLAB host first.",
                     stage="matlab_adapter",
-                )
-            if "[ingestImage]" in msg or "ingestImage.m" in msg:
-                raise RetinaSenseError(
-                    ErrorCode.INVALID_IMAGE,
-                    _ingest_error_message(msg),
-                    stage="ingestImage",
                 )
             raise RetinaSenseError(
                 ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
@@ -146,32 +136,18 @@ class MatlabAdapter(BaseMatlabAdapter):
                 stage="matlab_adapter",
             )
 
-        return self._map_case(case, artifacts)
+        return self._map_case(case)
 
     def _to_matlab_meta(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Build the MATLAB Case.meta struct (docs/ARCHITECTURE.md §4).
+        """Pass through opaque metadata; MATLAB runPipeline accepts a struct."""
+        return {k: v for k, v in metadata.items() if k in ("patientId", "eye", "phcId")}
 
-        The Case contract fixes meta fields patientId/eye/timestamp/phcId.
-        Backend CaseMeta omits timestamp, so it is synthesized in ISO-8601
-        (same shape MATLAB uses, e.g. datestr(now,'yyyy-mm-ddTHH:MM:SS')).
-        """
-        import datetime as _dt
-
-        meta = {k: v for k, v in metadata.items() if k in ("patientId", "eye", "phcId")}
-        meta.setdefault("timestamp", _dt.datetime.now().isoformat(timespec="seconds"))
-        return meta
-
-    def _map_case(
-        self,
-        case: dict[str, Any],
-        artifacts: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    def _map_case(self, case: dict[str, Any]) -> dict[str, Any]:
         """Map the MATLAB Case onto the API adapter output shape.
 
         Only values actually present in the returned Case are used.  A missing
         field results in an explicit None/False — never an invented number.
         """
-        artifacts = artifacts or {}
         quality = case.get("quality") or {}
         q_class = quality.get("class")
         if not q_class:
@@ -223,17 +199,11 @@ class MatlabAdapter(BaseMatlabAdapter):
             }
 
         if explain:
-            # The real overlays are carried separately — they are persisted per
-            # case by services.screening (which knows the case id) and exposed
-            # as safe API references.  The availability flags are driven by the
-            # actual image content extracted from the Case, never by the mere
-            # presence of the parent field.
             result["explain"] = {
-                "gradCamAvailable": artifacts.get("gradcam") is not None,
+                "gradCamAvailable": bool(explain.get("gradCam") is not None),
                 "gradCamPath": None,
-                "evidenceAvailable": artifacts.get("evidence") is not None,
+                "evidenceAvailable": bool(explain.get("evidenceOverlay") is not None),
                 "evidencePath": None,
-                "artifacts": artifacts,
                 "note": explain.get("note"),
             }
 
@@ -343,99 +313,24 @@ def default_adapter() -> BaseMatlabAdapter:
 # MATLAB <-> Python value conversion helpers
 # --------------------------------------------------------------------------
 
-def _extract_explain_artifacts(case_raw: Any) -> dict[str, Any]:
-    """Pull the real Grad-CAM / evidence overlay matrices out of the Case.
-
-    The engine returns the 224x224x3 overlay arrays as matlab.uint8 values;
-    they convert cleanly to numpy (verified against the live pipeline).  The
-    arrays are returned separately so ``_to_py`` never has to materialise the
-    images as nested Python lists, and so screening.py can persist them once it
-    knows the case id.
-
-    Content checks mirror services.artifacts: an all-zero attention overlay or
-    a colourless evidence overlay is reported as ``None`` (honest absence),
-    never a blank file.
-    """
-    from .artifacts import has_attention_content, has_visible_markers
-
-    explain = _struct_get(case_raw, "explain")
-    if not explain:
-        return {"gradcam": None, "evidence": None}
-
-    att = _as_uint8(_struct_get(explain, "attentionImage"))
-    evi = _as_uint8(_struct_get(explain, "evidenceOverlay"))
-    return {
-        "gradcam": att if has_attention_content(att) else None,
-        "evidence": evi if has_visible_markers(evi) else None,
-    }
-
-
-def _struct_get(obj: Any, name: str) -> Any:
-    if obj is None:
-        return None
-    if isinstance(obj, dict):
-        return obj.get(name)
-    if hasattr(obj, "_fieldnames") and name in obj._fieldnames():
-        return getattr(obj, name)
-    return None
-
-
-def _as_uint8(value: Any) -> np.ndarray | None:
-    if value is None:
-        return None
-    try:
-        if isinstance(value, np.ndarray):
-            return np.asarray(value, dtype=np.uint8) if value.size else None
-        size = value.size
-        dims = tuple(size()) if callable(size) else tuple(size)
-        if not dims or any(d == 0 for d in dims):
-            return None
-        return np.asarray(value, dtype=np.uint8)
-    except Exception:  # pragma: no cover - host-specific engine behaviour
-        return None
-
-
 def _to_py(value: Any) -> Any:
-    """Shallow-to-deep conversion from matlab.engine return values to python.
-
-    matlab.* numeric arrays are indexed element-wise (iteration yields rows,
-    so a flat float() loop silently drops/produces wrong vector shapes).
-    Row/column vectors map to flat lists to keep the Case numeric contract;
-    matrices map to nested row lists.
-    """
+    """Shallow-to-deep conversion from matlab.engine return values to python."""
     if hasattr(value, "_fieldnames"):  # matlab struct -> dict
         return {name: _to_py(getattr(value, name)) for name in value._fieldnames()}
     if isinstance(value, dict):        # nested python dict (sub-struct)
         return {k: _to_py(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_to_py(v) for v in value]
-    if hasattr(value, "size") and not isinstance(value, (str, bytes)):
-        # matlab.double / matlab.single / matlab.logical numeric array
-        dims = tuple(value.size)
-        if not dims or any(d == 0 for d in dims):
-            return None
-        if len(dims) == 1:
-            return [_to_py(value[i]) for i in range(dims[0])]
-        if dims[1] == 1:                       # column vector -> flat list
-            return [_to_py(value[i][0]) for i in range(dims[0])]
-        if dims[0] == 1:                       # row vector -> flat list
-            return [_to_py(value[0][j]) for j in range(dims[1])]
-        return [[_to_py(value[i][j]) for j in range(dims[1])] for i in range(dims[0])]
+    if hasattr(value, "size") and isinstance(value, object) and not isinstance(value, (str, bytes)):
+        # matlab.double / matlab.logical array
+        try:
+            flattened = [float(v) for v in value]
+            if len(flattened) == 1:
+                return flattened[0]
+            return flattened
+        except (TypeError, ValueError):
+            return value
     return value
-
-
-def _ingest_error_message(msg: str) -> str:
-    """Extract the clean ingest-stage message from an engine exception dump.
-
-    raiseError formats the MException as '[stage] msg'; the engine wrapper
-    prepends MATLAB stack traces, so pull out the first '[ingestImage]' line.
-    Falls back to the whole message (trimmed) if the marker is missing.
-    """
-    for line in msg.splitlines():
-        line = line.strip()
-        if line.startswith("[ingestImage]"):
-            return line[len("[ingestImage]") :].strip()
-    return msg.strip()
 
 
 def _scalar(value: Any) -> float | None:

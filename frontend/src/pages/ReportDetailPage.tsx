@@ -1,21 +1,29 @@
 /**
- * Report detail page — full screening report for one case, assembled from the
- * real backend report artifact (POST /api/cases/{caseId}/report). Shows case
- * information, image, quality, AI grade/confidence/uncertainty, referable
- * decision, explainability status, human review, the final decision, and the
- * report disclaimer. Nothing is invented here.
+ * Report detail — the full screening report for one case, assembled from the
+ * real backend report artifact. Shows case information, image, quality, AI
+ * grade/confidence/uncertainty, referable decision, explainability status,
+ * human review, the final decision, and the report disclaimer.
+ *
+ * Nothing is invented here: if the backend cannot produce the report, the page
+ * says so and offers a retry.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { generateReport, getCase } from '../api/endpoints';
 import type { CaseResponse, ReportResponse } from '../api/types';
+import { hasPrediction } from '../api/types';
 import { AiPredictionPanel } from '../components/AiPredictionPanel';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ExplainabilityPanel } from '../components/ExplainabilityPanel';
 import { FinalDecisionPanel } from '../components/FinalDecisionPanel';
 import { ImagePreview } from '../components/ImagePreview';
-import { LoadingIndicator } from '../components/LoadingIndicator';
 import { QualityPanel } from '../components/QualityPanel';
 import { StatusPill } from '../components/StatusPill';
+import { Alert } from '../components/ui/Alert';
+import { Breadcrumbs } from '../components/ui/Breadcrumbs';
+import { Button } from '../components/ui/Button';
+import { Card, CardBody, CardHeader, Row } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingBlock } from '../components/ui/Skeleton';
 import { navigate } from '../router';
 import { friendlyError } from '../utils/errors';
 import { formatPercent, statusLabel, statusTone } from '../utils/format';
@@ -66,21 +74,31 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
   }, [load]);
 
   if (state === 'loading') {
-    return <LoadingIndicator label={`Generating report for case ${caseId}…`} />;
+    return (
+      <div className="page">
+        <Breadcrumbs items={[{ label: 'Reports', path: '/reports' }, { label: caseId }]} />
+        <PageHeader title={`Screening report · ${caseId}`} subtitle="Assembling the report…" />
+        <LoadingBlock label={`Generating report for case ${caseId}…`} />
+      </div>
+    );
   }
 
   if (state === 'error' || !caseData) {
     return (
       <div className="page">
-        <h1>Report — {caseId}</h1>
+        <Breadcrumbs items={[{ label: 'Reports', path: '/reports' }, { label: caseId }]} />
+        <PageHeader
+          title={`Screening report · ${caseId}`}
+          subtitle="The report could not be loaded from the backend."
+        />
         {error && <ErrorBanner title={error.title} detail={error.detail} />}
         <div className="btn-row">
-          <button type="button" className="btn" onClick={() => navigate('/reports')}>
+          <Button variant="primary" icon="arrowLeft" onClick={() => navigate('/reports')}>
             Back to reports
-          </button>
-          <button type="button" className="btn" onClick={() => void load()}>
+          </Button>
+          <Button icon="refresh" onClick={() => void load()}>
             Try again
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -88,7 +106,8 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
 
   const payload = (report?.report ?? {}) as ReportPayload;
   const quality = payload.quality ?? caseData.quality;
-  const ai = payload.aiPrediction ?? caseData.aiPrediction;
+  const rawAi = payload.aiPrediction ?? caseData.aiPrediction;
+  const ai = hasPrediction(rawAi) ? rawAi : null;
   const explain = payload.explainability ?? caseData.explainability;
   const review = payload.humanReview ?? caseData.humanReview;
   const finalDecision = payload.finalDecision ?? caseData.finalDecision;
@@ -96,78 +115,103 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
 
   return (
     <div className="page">
-      <div className="case-head">
-        <h1>Screening report · {caseId}</h1>
-        <StatusPill tone={statusTone(effectiveStatus)} label={statusLabel(effectiveStatus)} />
-      </div>
-      <p className="page-intro">
-        Structured report for case {caseId}, assembled by the backend from the
-        stored screening and review records.
-      </p>
+      <Breadcrumbs
+        items={[
+          { label: 'Reports', path: '/reports' },
+          { label: 'Report', path: undefined },
+          { label: caseId },
+        ]}
+      />
 
-      {error && <ErrorBanner title={error.title} detail={error.detail} />}
+      <PageHeader
+        eyebrow="Structured screening report"
+        title={`Screening report · ${caseId}`}
+        subtitle={`Report for case ${caseId}, assembled by the backend from the stored
+          screening and review records.`}
+        badges={<StatusPill tone={statusTone(effectiveStatus)} label={statusLabel(effectiveStatus)} />}
+        actions={
+          <>
+            <Button icon="print" onClick={() => window.print()}>
+              Print
+            </Button>
+            <Button icon="layers" onClick={() => navigate(`/case/${caseId}`)}>
+              Open case
+            </Button>
+          </>
+        }
+      />
 
-      <section className="panel" aria-label="Case information">
-        <h2 className="panel-title">Case information</h2>
-        <div className="panel-row">
-          <span className="panel-label">Case ID</span>
-          <span className="panel-value">{caseId}</span>
-        </div>
-        <div className="panel-row">
-          <span className="panel-label">Patient ID</span>
-          <span className="panel-value">{payload.patientId || '—'}</span>
-        </div>
-        <div className="panel-row">
-          <span className="panel-label">Eye</span>
-          <span className="panel-value">{payload.eye || '—'}</span>
-        </div>
-        <div className="panel-row">
-          <span className="panel-label">PHC</span>
-          <span className="panel-value">{payload.phcId || '—'}</span>
-        </div>
-      </section>
+      {!report && error && (
+        <Alert
+          variant="warning"
+          icon="alert"
+          title={error.title}
+          role="alert"
+          action={
+            <Button size="sm" icon="refresh" onClick={() => void load()}>
+              Retry report generation
+            </Button>
+          }
+        >
+          {error.detail} Nothing is displayed in place of a report; the sections below are the
+          stored case record itself.
+        </Alert>
+      )}
 
-      <div className="case-grid">
-        <div className="case-column">
-          <section className="panel" aria-label="Fundus image">
-            <h2 className="panel-title">Fundus image</h2>
-            <ImagePreview caseId={caseId} />
-          </section>
+      <Card aria-label="Case information">
+        <CardHeader
+          title="Case information"
+          subtitle="Identifiers recorded with this case"
+          icon="clipboard"
+          bordered
+        />
+        <CardBody>
+          <div className="rows">
+            <Row label="Case ID">{caseId}</Row>
+            <Row label="Patient ID">{payload.patientId || '—'}</Row>
+            <Row label="Eye">{payload.eye || '—'}</Row>
+            <Row label="PHC">{payload.phcId || '—'}</Row>
+            <Row label="Status">{statusLabel(effectiveStatus)}</Row>
+          </div>
+        </CardBody>
+      </Card>
+
+      <div className="grid-2">
+        <div className="page-stack">
+          <Card aria-label="Fundus image">
+            <CardHeader title="Fundus image" subtitle="Stored with the case" icon="image" bordered />
+            <CardBody>
+              <ImagePreview caseId={caseId} />
+            </CardBody>
+          </Card>
           <QualityPanel quality={quality} />
         </div>
-        <div className="case-column">
+        <div className="page-stack">
           <AiPredictionPanel ai={ai} />
-          <ExplainabilityPanel caseId={caseId} explain={explain} />
+          <ExplainabilityPanel explain={explain} />
         </div>
       </div>
 
       <FinalDecisionPanel ai={ai} fd={finalDecision} review={review} />
 
       {report?.summary && (
-        <section className="panel" aria-label="Report summary">
-          <h2 className="panel-title">Report summary</h2>
-          <p className="report-summary">{report.summary}</p>
-        </section>
+        <Card aria-label="Report summary">
+          <CardHeader
+            title="Report summary"
+            subtitle="Narrative assembled by the reporting stage"
+            icon="file"
+            bordered
+          />
+          <CardBody>
+            <p className="report-summary">{report.summary}</p>
+          </CardBody>
+        </Card>
       )}
 
       {report?.disclaimer && (
-        <section className="panel" aria-label="Report disclaimer">
-          <h2 className="panel-title">Disclaimer</h2>
-          <p className="note-text">{report.disclaimer}</p>
-        </section>
-      )}
-
-      {!report && (
-        <section className="panel" aria-label="Report unavailable">
-          <h2 className="panel-title">Report unavailable</h2>
-          <p className="empty-note">
-            No report could be generated for this case. Check that a screening was
-            completed, then try again.
-          </p>
-          <button type="button" className="btn" onClick={() => void load()}>
-            Retry report generation
-          </button>
-        </section>
+        <Alert variant="neutral" title="Disclaimer" icon="shieldCheck" role="note">
+          {report.disclaimer}
+        </Alert>
       )}
 
       <footer className="report-footer">
@@ -178,12 +222,12 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
       </footer>
 
       <div className="btn-row">
-        <button type="button" className="btn" onClick={() => navigate('/reports')}>
+        <Button icon="arrowLeft" onClick={() => navigate('/reports')}>
           Back to reports
-        </button>
-        <button type="button" className="btn" onClick={() => navigate(`/case/${caseId}`)}>
+        </Button>
+        <Button variant="ghost" icon="layers" onClick={() => navigate(`/case/${caseId}`)}>
           Open case
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -11,7 +11,6 @@ REPOSITORY_ROOT = BACKEND_ROOT.parent
 DATA_DIR = BACKEND_ROOT / "data"
 CASES_DIR = DATA_DIR / "cases"
 IMAGES_DIR = DATA_DIR / "images"
-ARTIFACTS_DIR = DATA_DIR / "artifacts"
 
 # SQLite database
 DATABASE_PATH = Path(

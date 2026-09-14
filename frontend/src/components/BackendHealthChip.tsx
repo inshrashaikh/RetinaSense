@@ -30,18 +30,31 @@ export function BackendHealthChip() {
   }, []);
 
   if (state === 'loading') {
-    return <span className="health-chip health-loading">Checking backend…</span>;
+    return (
+      <span className="health-chip">
+        <span className="loading-spinner" aria-hidden="true" />
+        Checking backend…
+      </span>
+    );
   }
+
   if (state === 'unreachable') {
     return (
-      <span className="health-chip health-bad" role="note">
+      <span className="health-chip health-chip--bad" role="note">
+        <span className="health-chip__dot" aria-hidden="true" />
         Backend unreachable — real screening unavailable
       </span>
     );
   }
+
+  const engineUp = Boolean(health?.matlabEngine);
   return (
-    <span className={`health-chip ${health?.matlabEngine ? 'health-good' : 'health-warn'}`} role="note">
-      Backend reachable · MATLAB AI engine {health?.matlabEngine ? 'connected' : 'not connected'}
+    <span
+      className={`health-chip ${engineUp ? 'health-chip--good' : 'health-chip--warn'}`}
+      role="note"
+    >
+      <span className="health-chip__dot" aria-hidden="true" />
+      Backend reachable · MATLAB AI engine {engineUp ? 'connected' : 'not connected'}
     </span>
   );
 }
