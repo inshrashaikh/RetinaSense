@@ -1,16 +1,25 @@
 /**
- * New screening — captures patient/eye metadata, a fundus image, runs the
- * quality gate + AI screening, and opens the case result page.
+ * New screening — captures patient/eye metadata and a fundus image, runs the
+ * quality gate + AI screening, then opens the case result page.
+ *
+ * Upload rules and validation behaviour are unchanged (JPEG/PNG, ≤20 MB —
+ * mirroring the backend limits).
  */
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { createCase, screenCase } from '../api/endpoints';
 import { validateImageFile } from '../utils/validation';
 import { friendlyError } from '../utils/errors';
-import { ErrorBanner } from '../components/ErrorBanner';
-import { LoadingIndicator } from '../components/LoadingIndicator';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { Card, CardBody, CardHeader } from '../components/ui/Card';
+import { FileDropzone } from '../components/ui/FileDropzone';
+import { Field, Input, Select } from '../components/ui/Form';
+import { LoadingState } from '../components/ui/Skeleton';
+import { PageHeader } from '../components/ui/PageHeader';
 import { navigate } from '../router';
 
 type Step = 'idle' | 'creating' | 'screening' | 'error';
+type InvalidField = 'patientId' | 'image' | null;
 
 const EYES = [
   { value: 'OD', label: 'OD — right eye' },
@@ -24,28 +33,38 @@ export function NewScreeningPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [validationMsg, setValidationMsg] = useState('');
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
   const [step, setStep] = useState<Step>('idle');
   const [caseId, setCaseId] = useState<string | null>(null);
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
+  const busy = step === 'creating' || step === 'screening';
+
+  function onFileSelect(f: File | null) {
     setFile(f);
     setValidationMsg('');
-    if (f) {
-      const v = validateImageFile(f);
-      if (!v.ok) {
-        setValidationMsg(v.message);
-        setPreview(null);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => setPreview(typeof reader.result === 'string' ? reader.result : null);
-      reader.readAsDataURL(f);
-    } else {
+    setInvalidField(null);
+    if (!f) {
       setPreview(null);
+      return;
     }
+    const v = validateImageFile(f);
+    if (!v.ok) {
+      setValidationMsg(v.message);
+      setInvalidField('image');
+      setPreview(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setPreview(typeof reader.result === 'string' ? reader.result : null);
+    reader.readAsDataURL(f);
+  }
+
+  function resetImage() {
+    setPreview(null);
+    setFile(null);
+    setValidationMsg('');
+    setInvalidField(null);
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -55,13 +74,16 @@ export function NewScreeningPage() {
 
     if (!patientId.trim()) {
       setValidationMsg('Please enter a patient id.');
+      setInvalidField('patientId');
       return;
     }
     const v = validateImageFile(file);
     if (!v.ok) {
       setValidationMsg(v.message);
+      setInvalidField('image');
       return;
     }
+    setInvalidField(null);
 
     const meta = { patientId: patientId.trim(), eye, phcId: phcId.trim() };
     try {
@@ -98,80 +120,131 @@ export function NewScreeningPage() {
 
   return (
     <div className="page">
-      <h1>New screening</h1>
-      <p className="page-intro">
-        Upload a clear fundus image. The backend enforces the upload limits
-        (JPEG/PNG, ≤20 MB) — the checks here are the same, applied instantly.
-      </p>
+      <PageHeader
+        eyebrow="Step 1 · new case"
+        title="New screening"
+        subtitle="Upload a clear fundus image. The backend enforces the upload limits
+          (JPEG/PNG, ≤20 MB) — the checks here are the same limits, applied instantly
+          so nothing is uploaded needlessly."
+      />
 
-      {step === 'screening' && (
-        <LoadingIndicator label="Screening in progress… this may take up to 90 s (quality gate → AI grading)." />
-      )}
+      {error && <Alert variant="error" title={error.title}>{error.detail}</Alert>}
 
-      {error && <ErrorBanner title={error.title} detail={error.detail} />}
-
-      <form className="form" aria-label="Screening form" onSubmit={onSubmit}>
-        <label className="field">
-          <span className="field-label">Patient id</span>
-          <input type="text" value={patientId} onChange={(e) => setPatientId(e.target.value)}
-            placeholder="Opaque patient token, no PII" autoComplete="off" />
-        </label>
-
-        <label className="field">
-          <span className="field-label">Eye</span>
-          <select value={eye} onChange={(e) => setEye(e.target.value)}>
-            {EYES.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span className="field-label">PHC id</span>
-          <input type="text" value={phcId} onChange={(e) => setPhcId(e.target.value)}
-            placeholder="Primary health centre id (optional)" autoComplete="off" />
-        </label>
-
-        <label className="field">
-          <span className="field-label">Fundus image</span>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,.jpg,.jpeg,.png"
-            onChange={onFileChange}
-            aria-describedby="upload-hint"
+      <form className="form form--wide" aria-label="Screening form" onSubmit={onSubmit}>
+        <Card>
+          <CardHeader
+            title="Patient & eye"
+            subtitle="Opaque tokens only — no personally identifying information."
+            icon="user"
+            bordered
           />
-          <span id="upload-hint" className="hint">JPEG or PNG, max 20 MB.</span>
-        </label>
+          <CardBody>
+            <Field label="Patient id" hint="Opaque patient token, no PII.">
+              <Input
+                type="text"
+                value={patientId}
+                onChange={(e) => {
+                  setPatientId(e.target.value);
+                  if (invalidField === 'patientId') setInvalidField(null);
+                }}
+                placeholder="Opaque patient token, no PII"
+                autoComplete="off"
+                disabled={busy}
+                className={invalidField === 'patientId' ? 'input--invalid' : ''}
+                aria-invalid={invalidField === 'patientId' || undefined}
+              />
+            </Field>
 
-        {validationMsg && (
-          <div className="validation-error" role="alert">
-            {validationMsg}
-          </div>
-        )}
+            <Field label="Eye">
+              <Select
+                value={eye}
+                onChange={(e) => setEye(e.target.value)}
+                disabled={busy}
+              >
+                {EYES.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
+            </Field>
 
-        {preview && (
-          <div className="preview-block">
-            <span className="field-label">Preview</span>
-            <img className="fundus-img fundus-img-preview" src={preview} alt="Selected fundus image preview" />
-          </div>
-        )}
+            <Field label="PHC id">
+              <Input
+                type="text"
+                value={phcId}
+                onChange={(e) => setPhcId(e.target.value)}
+                placeholder="Primary health centre id (optional)"
+                autoComplete="off"
+                disabled={busy}
+              />
+            </Field>
+          </CardBody>
+        </Card>
 
-        <div className="btn-row">
-          <button type="submit" className="btn btn-primary btn-lg" disabled={step === 'creating' || step === 'screening'}>
+        <Card>
+          <CardHeader
+            title="Fundus image"
+            subtitle="JPEG or PNG · up to 20 MB · one image per case."
+            icon="camera"
+            bordered
+          />
+          <CardBody>
+            <FileDropzone
+              id="fundus-file"
+              label="Fundus image"
+              hint="The backend accepts JPEG and PNG up to 20 MB."
+              emptyTitle="Drag & drop a fundus image, or browse"
+              emptyHint="JPEG or PNG, max 20 MB · click or drop a file here"
+              file={file}
+              onSelect={onFileSelect}
+              invalid={invalidField === 'image'}
+              disabled={busy}
+            />
+
+            {validationMsg && (
+              <Alert variant="warning" title="Check the image">
+                {validationMsg}
+              </Alert>
+            )}
+
+            {preview && (
+              <div className="preview-block">
+                <span className="field__label">Preview</span>
+                <img
+                  className="fundus-img fundus-img-preview"
+                  src={preview}
+                  alt="Selected fundus image preview"
+                />
+              </div>
+            )}
+
+            {busy && (
+              <LoadingState
+                label={
+                  step === 'creating'
+                    ? 'Creating the case…'
+                    : 'Screening in progress… this may take up to 90 s (quality gate → AI grading).'
+                }
+              />
+            )}
+          </CardBody>
+        </Card>
+
+        <div className="form__actions btn-row">
+          <Button type="submit" variant="primary" size="lg" icon="scan" loading={busy}>
             {step === 'creating' ? 'Creating case…' : step === 'screening' ? 'Screening…' : 'Run screening'}
-          </button>
+          </Button>
           {step === 'error' && caseId && (
-            <button type="button" className="btn" onClick={onRetry}>Retry screening</button>
+            <Button icon="refresh" onClick={() => void onRetry()}>
+              Retry screening
+            </Button>
           )}
-          <button
-            type="button"
-            className="btn"
-            disabled={step === 'creating' || step === 'screening'}
-            onClick={() => { setPreview(null); setFile(null); setValidationMsg(''); if (fileRef.current) fileRef.current.value = ''; }}
-          >
-            Clear
-          </button>
+          <Button variant="ghost" onClick={resetImage} disabled={busy || (!file && !preview)}>
+            Clear image
+          </Button>
+          <span className="note-text">
+            Run screening registers the case, enforces the quality gate and produces the
+            AI-assisted grade.
+          </span>
         </div>
       </form>
     </div>

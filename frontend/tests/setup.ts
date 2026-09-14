@@ -6,3 +6,9 @@ if (typeof URL.createObjectURL !== 'function') {
   URL.createObjectURL = () => 'blob:mock-preview';
   URL.revokeObjectURL = () => {};
 }
+
+// jsdom does not implement scrolling. The app uses it for route changes
+// (scroll to top) and for landing-page section anchors; stub both so the
+// behaviour is exercised without noisy "not implemented" errors.
+window.scrollTo = () => {};
+Element.prototype.scrollIntoView = () => {};

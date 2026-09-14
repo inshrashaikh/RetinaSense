@@ -97,8 +97,6 @@ export interface CaseListItem {
   eye: string;
   phcId: string;
   createdAt: string | null;
-  /** Referable flag from the AI screening result (null until screened). */
-  referable?: boolean | null;
 }
 
 /** Aggregated counts used by the dashboard stat cards (GET /api/cases/stats). */
@@ -144,4 +142,15 @@ export const GRADE_LABELS: Record<number, string> = {
 export function gradeLabel(grade: number | null): string | null {
   if (grade === null || grade === undefined) return null;
   return GRADE_LABELS[grade] ?? 'Unknown';
+}
+
+/**
+ * True only when the backend actually produced a prediction.
+ *
+ * The API returns an `AiPrediction` object with every field `null` for a case
+ * that was never screened (or whose screen did not reach grading), so a non-null
+ * object is NOT evidence that a result exists — a grade is.
+ */
+export function hasPrediction(ai: AiPrediction | null | undefined): ai is AiPrediction {
+  return ai !== null && ai !== undefined && ai.grade !== null && ai.grade !== undefined;
 }

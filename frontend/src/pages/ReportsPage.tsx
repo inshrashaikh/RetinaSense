@@ -1,113 +1,165 @@
 /**
- * Reports page — every case that has been screened, each with a link to its
- * screening report. Reports are assembled by the backend from the real stored
- * case data (POST /api/cases/{caseId}/report) and retrieved from the backend.
+ * Reports — every screened case, each with a link to its screening report.
+ * Reports are assembled by the backend from the real stored case data and are
+ * never invented client-side.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { listCases } from '../api/endpoints';
-import type { CaseListItem } from '../api/types';
-import { ErrorBanner } from '../components/ErrorBanner';
+import { useMemo, useState } from 'react';
+import { useCaseList } from '../hooks/useCaseList';
+import { formatDate, statusLabel, statusTone } from '../utils/format';
+import { Alert } from '../components/ui/Alert';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Card, CardBody, CardHeader } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SearchInput } from '../components/ui/Form';
+import { PageHeader } from '../components/ui/PageHeader';
+import { SkeletonRows } from '../components/ui/Skeleton';
 import { StatusPill } from '../components/StatusPill';
 import { navigate } from '../router';
-import { friendlyError } from '../utils/errors';
-import { statusTone, statusLabel } from '../utils/format';
-import { formatDate } from './CasesPage';
-
-type ListState = 'loading' | 'done' | 'error';
 
 export function ReportsPage() {
-  const [state, setState] = useState<ListState>('loading');
-  const [cases, setCases] = useState<CaseListItem[]>([]);
-  const [error, setError] = useState<{ title: string; detail: string } | null>(null);
+  const { state, cases, error, reload } = useCaseList();
+  const [query, setQuery] = useState('');
 
-  const load = useCallback(async () => {
-    setState('loading');
-    setError(null);
-    try {
-      const items = await listCases();
-      setCases(items);
-      setState('done');
-    } catch (err) {
-      setError(friendlyError(err));
-      setState('error');
-    }
-  }, []);
+  const screenable = useMemo(() => cases.filter((c) => c.status !== 'created'), [cases]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const screenable = cases.filter((c) => c.status !== 'created');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return screenable;
+    return screenable.filter(
+      (c) =>
+        c.caseId.toLowerCase().includes(q) ||
+        c.patientId.toLowerCase().includes(q) ||
+        c.phcId.toLowerCase().includes(q),
+    );
+  }, [screenable, query]);
 
   return (
     <div className="page">
-      <h1>Reports</h1>
-      <p className="page-intro">
-        Each screening case has a structured report assembled from the stored
-        quality assessment, immutable AI result, human review, and final decision.
-        A report is generated only from real backend data — never invented.
-      </p>
+      <PageHeader
+        eyebrow="Documentation"
+        title="Reports"
+        subtitle="Each screening case has a structured report assembled from the stored
+          quality assessment, immutable AI result, human review, and final decision.
+          A report is generated only from real backend data — never invented."
+        actions={
+          <Button icon="refresh" onClick={reload}>
+            Refresh
+          </Button>
+        }
+      />
 
-      {error && <ErrorBanner title={error.title} detail={error.detail} />}
+      {error && <Alert variant="error" title={error.title}>{error.detail}</Alert>}
 
-      {state === 'done' && screenable.length === 0 && (
-        <section className="panel">
-          <h2 className="panel-title">No reports yet</h2>
-          <p className="empty-note">
-            Reports become available after a case has been screened. Cases awaiting
-            only creation have nothing to report.
-          </p>
-          <div className="btn-row">
-            <button type="button" className="btn btn-primary" onClick={() => navigate('/screening')}>
-              New screening
-            </button>
-          </div>
-        </section>
-      )}
+      <Card>
+        <CardHeader
+          title="Screening reports"
+          subtitle="Cases that have completed at least the quality gate"
+          icon="file"
+          bordered
+          actions={
+            <Badge tone="brand" icon="file">
+              {filtered.length} report{filtered.length === 1 ? '' : 's'}
+            </Badge>
+          }
+        />
 
-      {state === 'done' && screenable.length > 0 && (
-        <section className="panel" aria-label="Report list">
-          <table className="case-table">
-            <thead>
-              <tr>
-                <th>Case</th>
-                <th>Status</th>
-                <th>Eye</th>
-                <th>Created</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {screenable.map((c) => (
-                <tr key={c.caseId}>
-                  <td>{c.caseId}</td>
-                  <td>
-                    <StatusPill tone={statusTone(c.status)} label={statusLabel(c.status)} />
-                  </td>
-                  <td className="muted">{c.eye || '—'}</td>
-                  <td className="muted">{formatDate(c.createdAt)}</td>
-                  <td>
-                    <button type="button" className="btn btn-sm" onClick={() => navigate(`/reports/${c.caseId}`)}>
-                      View report
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+        {state === 'loading' && <SkeletonRows rows={4} />}
 
-      {state === 'error' && (
-        <section className="panel">
-          <p className="empty-note">
-            Reports could not be listed while the backend is unreachable.
-          </p>
-          <button type="button" className="btn" onClick={() => void load()}>
-            Try again
-          </button>
-        </section>
-      )}
+        {state === 'error' && (
+          <CardBody>
+            <Alert variant="error" title="Reports could not be listed">
+              {error?.detail ?? 'Reports could not be listed while the backend is unreachable.'}
+            </Alert>
+            <div className="btn-row">
+              <Button size="sm" icon="refresh" onClick={reload}>
+                Try again
+              </Button>
+            </div>
+          </CardBody>
+        )}
+
+        {state === 'done' && screenable.length === 0 && (
+          <CardBody>
+            <EmptyState
+              icon="file"
+              title="No reports yet"
+              action={
+                <Button variant="primary" icon="plus" onClick={() => navigate('/screening')}>
+                  New screening
+                </Button>
+              }
+            >
+              Reports become available after a case has been screened. Cases awaiting
+              only creation have nothing to report.
+            </EmptyState>
+          </CardBody>
+        )}
+
+        {state === 'done' && screenable.length > 0 && (
+          <>
+            <CardBody>
+              <div className="toolbar">
+                <SearchInput
+                  label="Search reports"
+                  placeholder="Search by case id, patient token or PHC…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            </CardBody>
+
+            {filtered.length === 0 ? (
+              <CardBody>
+                <EmptyState icon="search" title="No reports match this search">
+                  Clear the search to see every screened case.
+                </EmptyState>
+              </CardBody>
+            ) : (
+              <CardBody className="card__body--flush">
+                <div className="table-wrap">
+                  <table className="table table--stack">
+                    <thead>
+                      <tr>
+                        <th>Case</th>
+                        <th>Status</th>
+                        <th>Eye</th>
+                        <th>Created</th>
+                        <th className="table__cell-actions">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((c) => (
+                        <tr key={c.caseId}>
+                          <td data-label="Case" className="table__cell-strong">
+                            {c.caseId}
+                          </td>
+                          <td data-label="Status">
+                            <StatusPill tone={statusTone(c.status)} label={statusLabel(c.status)} />
+                          </td>
+                          <td data-label="Eye" className="muted">
+                            {c.eye || '—'}
+                          </td>
+                          <td data-label="Created" className="muted">
+                            {formatDate(c.createdAt)}
+                          </td>
+                          <td data-label="" className="table__cell-actions">
+                            <Button size="sm" onClick={() => navigate(`/reports/${c.caseId}`)}>
+                              View report
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardBody>
+            )}
+          </>
+        )}
+      </Card>
     </div>
   );
 }

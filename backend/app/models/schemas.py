@@ -93,7 +93,6 @@ class CaseListItem(BaseModel):
     eye: str = ""
     phcId: str = ""
     createdAt: str | None = None
-    referable: bool | None = None
 
 
 class CaseStats(BaseModel):

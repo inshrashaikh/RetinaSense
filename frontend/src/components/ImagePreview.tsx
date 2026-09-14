@@ -1,11 +1,12 @@
 /**
  * Image preview — fetched from the backend image endpoint
- * (GET /api/cases/{caseId}/image).  Honest about images the backend cannot
+ * (GET /api/cases/{caseId}/image). Honest about images the backend cannot
  * serve: it shows a message instead of inventing a picture.
  */
 import { useEffect, useState } from 'react';
 import { fetchCaseImage } from '../api/endpoints';
 import { friendlyError } from '../utils/errors';
+import { Icon } from './ui/Icon';
 
 type ImageState = 'loading' | 'done' | 'unavailable';
 
@@ -46,19 +47,21 @@ export function ImagePreview({ caseId }: { caseId: string }) {
   if (state === 'unavailable') {
     return (
       <div className="image-placeholder" aria-label="Image preview unavailable">
-        <p>
+        <span className="image-placeholder__row">
+          <Icon name="image" size={18} />
           <strong>Image preview unavailable</strong>
-        </p>
-        <p>{detail ?? 'The backend has no fundus image to serve for this case.'}</p>
+        </span>
+        <span>{detail ?? 'The backend has no fundus image to serve for this case.'}</span>
       </div>
     );
   }
 
   return (
-    <div className="image-placeholder" aria-label="Loading image preview">
-      <p>
+    <div className="image-placeholder" aria-label="Loading image preview" role="status">
+      <span className="image-placeholder__row">
+        <span className="loading-spinner" aria-hidden="true" />
         <strong>Loading image…</strong>
-      </p>
+      </span>
     </div>
   );
 }

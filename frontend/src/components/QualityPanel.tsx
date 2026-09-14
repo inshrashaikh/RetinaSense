@@ -1,65 +1,81 @@
 /**
- * Quality gate result panel.
+ * Quality gate result panel — the deterministic assessment that runs before any
+ * grading, including the recapture instruction when an image is rejected.
  */
 import type { QualityResult } from '../api/types';
 import { formatScore, qualityClassLabel } from '../utils/format';
+import { Alert } from './ui/Alert';
+import { Card, CardBody, CardHeader, Row } from './ui/Card';
 import { StatusPill } from './StatusPill';
+import type { StatusTone } from '../utils/format';
 
-function toneFor(cls: string | null | undefined) {
+function toneFor(cls: string | null | undefined): StatusTone {
   switch ((cls ?? '').toLowerCase()) {
     case 'good':
-      return 'good' as const;
+      return 'good';
     case 'borderline':
-      return 'warn' as const;
+      return 'warn';
     case 'ungradable':
-      return 'bad' as const;
+      return 'bad';
     default:
-      return 'neutral' as const;
+      return 'neutral';
   }
 }
 
 export function QualityPanel({ quality }: { quality: QualityResult }) {
   const cls = quality.class ?? null;
-  const label = qualityClassLabel(cls);
+  const score = quality.score;
+  const hasScore = score !== null && score !== undefined && !Number.isNaN(score);
 
   return (
-    <section className="panel" aria-label="Image quality result">
-      <h2 className="panel-title">Image quality</h2>
-      <div className="panel-row">
-        <span className="panel-label">Quality class</span>
-        <StatusPill tone={toneFor(cls)} label={label} />
-      </div>
-      <div className="panel-row">
-        <span className="panel-label">Quality score</span>
-        <span className="panel-value">{formatScore(quality.score)}</span>
-      </div>
-
-      {quality.failureReasons.length > 0 && (
-        <div className="panel-block">
-          <h3 className="panel-subheading">Why this image was not “good”</h3>
-          <ul className="reason-list">
-            {quality.failureReasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
+    <Card aria-label="Image quality result">
+      <CardHeader
+        title="Image quality"
+        subtitle="Deterministic gate · runs before any grading"
+        icon="gauge"
+        bordered
+      />
+      <CardBody>
+        <div className="rows">
+          <Row label="Quality class">
+            <StatusPill tone={toneFor(cls)} label={qualityClassLabel(cls)} />
+          </Row>
+          <Row label="Quality score">{formatScore(score)}</Row>
         </div>
-      )}
 
-      {(quality.recaptureReason || quality.recaptureInstruction) && (
-        <div className="recapture-box" role="note">
-          <h3 className="panel-subheading">Recapture requested</h3>
-          {quality.recaptureReason && (
-            <p>
-              <span className="panel-label">Reason:</span> {quality.recaptureReason}
-            </p>
-          )}
-          {quality.recaptureInstruction && (
-            <p>
-              <span className="panel-label">How to retake:</span> {quality.recaptureInstruction}
-            </p>
-          )}
-        </div>
-      )}
-    </section>
+        {hasScore && (
+          <div className="meter" aria-hidden="true">
+            <span className="meter__fill" style={{ width: `${Math.round(score! * 100)}%` }} />
+          </div>
+        )}
+
+        {quality.failureReasons.length > 0 && (
+          <div className="block">
+            <p className="block__title">Why this image was not “good”</p>
+            <ul className="reason-list">
+              {quality.failureReasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {(quality.recaptureReason || quality.recaptureInstruction) && (
+          <Alert variant="warning" title="Recapture requested" icon="camera">
+            {quality.recaptureReason && (
+              <p>
+                <span className="row__label">Reason:</span>{' '}
+                <span className="mono">{quality.recaptureReason}</span>
+              </p>
+            )}
+            {quality.recaptureInstruction && (
+              <p>
+                <span className="row__label">How to retake:</span> {quality.recaptureInstruction}
+              </p>
+            )}
+          </Alert>
+        )}
+      </CardBody>
+    </Card>
   );
 }

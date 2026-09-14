@@ -1,32 +1,37 @@
 /**
- * Dashboard stat cards + AI-assisted / human-in-the-loop pipeline indicator.
- * Counts come from the backend (GET /api/cases/stats); when the backend is
- * unreachable the cards show an honest "unavailable" state instead of zeros.
+ * DashboardStats — backend-derived case metrics plus the screening workflow
+ * overview. Counts come from GET /api/cases/stats; when the backend is
+ * unreachable the cards say so instead of showing zeros.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { fetchCaseStats, fetchHealth } from '../api/endpoints';
 import type { CaseStats, HealthResponse } from '../api/types';
 import { BackendHealthChip } from './BackendHealthChip';
+import { Alert } from './ui/Alert';
+import { Card, CardBody, CardHeader } from './ui/Card';
+import { SkeletonStatGrid } from './ui/Skeleton';
+import { StatCard, type StatTone } from './ui/StatCard';
+import type { IconName } from './ui/Icon';
+import { Icon } from './ui/Icon';
 
 type StatsState = 'loading' | 'done' | 'unreachable';
 
-function StatCard({
-  label,
-  value,
-  note,
-}: {
+const METRICS: {
+  key: keyof CaseStats;
   label: string;
-  value: number | string;
-  note?: string;
-}) {
-  return (
-    <div className="stat-card" aria-label={label}>
-      <span className="stat-value">{value}</span>
-      <span className="stat-label">{label}</span>
-      {note && <span className="stat-note">{note}</span>}
-    </div>
-  );
-}
+  icon: IconName;
+  tone: StatTone;
+  note: string;
+}[] = [
+  { key: 'totalCases', label: 'Total cases', icon: 'layers', tone: 'brand', note: 'All cases on the backend' },
+  { key: 'screeningsCompleted', label: 'Screenings completed', icon: 'checkCircle', tone: 'good', note: 'Quality gate + AI grading finished' },
+  { key: 'pendingReviews', label: 'Pending reviews', icon: 'inbox', tone: 'info', note: 'Awaiting a human decision' },
+  { key: 'reviewed', label: 'Reviewed', icon: 'userCheck', tone: 'good', note: 'Human decision recorded' },
+  { key: 'recaptureRequired', label: 'Recapture required', icon: 'alert', tone: 'warn', note: 'Failed the quality gate' },
+  { key: 'created', label: 'Awaiting screening', icon: 'hourglass', tone: 'brand', note: 'Created, not yet screened' },
+];
+
+const WORKFLOW_STEPS = ['Quality gate', 'AI grading', 'Human review'];
 
 export function DashboardStats() {
   const [stats, setStats] = useState<CaseStats | null>(null);
@@ -52,60 +57,96 @@ export function DashboardStats() {
 
   if (state === 'loading') {
     return (
-      <section className="panel" aria-label="Overview statistics">
-        <h2 className="panel-title">Overview</h2>
-        <div className="loading">
-          <span className="loading-spinner" aria-hidden="true" />
-          <span>Loading statistics…</span>
-        </div>
-      </section>
+      <Card aria-label="Overview statistics">
+        <CardHeader title="Overview" subtitle="Reading live counts from the backend…" icon="gauge" />
+        <CardBody>
+          <SkeletonStatGrid count={6} />
+        </CardBody>
+      </Card>
     );
   }
 
   if (state === 'unreachable' || !stats) {
     return (
-      <section className="panel" aria-label="Overview statistics">
-        <h2 className="panel-title">Overview</h2>
-        <p className="empty-note">
-          Statistics are unavailable while the backend is unreachable. Nothing is
-          assumed in their place.
-        </p>
-        <div className="hero-status">
-          <BackendHealthChip />
-        </div>
-      </section>
+      <Card aria-label="Overview statistics">
+        <CardHeader
+          title="Overview"
+          subtitle="Live counts from the backend case store"
+          icon="gauge"
+          actions={<BackendHealthChip />}
+        />
+        <CardBody>
+          <Alert variant="info" title="Statistics unavailable">
+            Statistics are unavailable while the backend is unreachable. Nothing is
+            assumed in their place.
+          </Alert>
+        </CardBody>
+      </Card>
     );
   }
 
   return (
-    <div className="panel">
-      <div className="panel-head-row">
-        <h2 className="panel-title">Overview</h2>
-        <BackendHealthChip />
-      </div>
-      <div className="stat-grid">
-        <StatCard label="Total cases" value={stats.totalCases} />
-        <StatCard label="Screenings completed" value={stats.screeningsCompleted} />
-        <StatCard label="Pending reviews" value={stats.pendingReviews} />
-        <StatCard label="Reviewed" value={stats.reviewed} />
-        <StatCard label="Recapture required" value={stats.recaptureRequired} />
-        <StatCard label="Awaiting screening" value={stats.created} />
-      </div>
+    <div className="page-stack">
+      <Card aria-label="Overview statistics">
+        <CardHeader
+          title="Overview"
+          subtitle="Live counts from the backend case store"
+          icon="gauge"
+          actions={<BackendHealthChip />}
+        />
+        <CardBody>
+          <div className="stat-grid">
+            {METRICS.map((metric) => (
+              <StatCard
+                key={metric.key}
+                label={metric.label}
+                value={stats[metric.key]}
+                note={metric.note}
+                icon={metric.icon}
+                tone={metric.tone}
+              />
+            ))}
+          </div>
+        </CardBody>
+      </Card>
 
-      <div className="pipeline-strip" role="note" aria-label="Screening workflow">
-        <span className="pipeline-step">1 · Quality gate</span>
-        <span className="pipeline-arrow" aria-hidden="true">→</span>
-        <span className="pipeline-step">2 · AI grading</span>
-        <span className="pipeline-arrow" aria-hidden="true">→</span>
-        <span className="pipeline-step">3 · Human review</span>
-        <span className="pipeline-arrow" aria-hidden="true">→</span>
-        <span className="pipeline-step pipeline-step-final">4 · Final referral decision</span>
-      </div>
-      <p className="note-text">
-        AI-assisted screening with a human-in-the-loop final decision. The AI result is
-        never overwritten by a reviewer; the final decision is stored separately.
-        {health && health.matlabEngine ? '' : ' The MATLAB AI engine is not connected, so real screening is currently unavailable.'}
-      </p>
+      <Card aria-label="Screening workflow">
+        <CardHeader
+          title="Screening workflow"
+          subtitle="AI assists; the final referral decision is always human"
+          icon="workflow"
+        />
+        <CardBody>
+          <div className="pipeline-strip" role="note" aria-label="Screening workflow steps">
+            {WORKFLOW_STEPS.map((step, i) => (
+              <Fragment key={step}>
+                <span className="pipeline-step">
+                  <span className="pipeline-step__num" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  {step}
+                </span>
+                <span className="pipeline-arrow" aria-hidden="true">
+                  <Icon name="chevronRight" size={15} />
+                </span>
+              </Fragment>
+            ))}
+            <span className="pipeline-step pipeline-step--final">
+              <span className="pipeline-step__num" aria-hidden="true">
+                4
+              </span>
+              Final referral decision
+            </span>
+          </div>
+          <p className="note-text">
+            The AI result is never overwritten by a reviewer; the final decision is
+            stored separately.
+            {health && !health.matlabEngine
+              ? ' The MATLAB AI engine is not connected, so real screening is currently unavailable.'
+              : ''}
+          </p>
+        </CardBody>
+      </Card>
     </div>
   );
 }
