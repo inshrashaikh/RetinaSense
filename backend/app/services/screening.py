@@ -28,6 +28,7 @@ from ..models.schemas import (
     FinalDecision,
     QualityResult,
 )
+from ..services import artifacts as artifacts_svc
 from ..services.matlab_adapter import BaseMatlabAdapter
 from ..storage import database_store
 from ..utils.case_id import next_case_id
@@ -154,21 +155,27 @@ def run_screening(
             "reviewRequired": calibrated_data.get("reviewRequired"),
         }
 
-    # Explainability
-    if explain_data:
-        screening["explainability"] = {
-            "gradCamAvailable": explain_data.get("gradCamAvailable", False),
-            "gradCamPath": explain_data.get("gradCamPath"),
-            "evidenceAvailable": explain_data.get("evidenceAvailable", False),
-            "evidencePath": explain_data.get("evidencePath"),
-        }
-    else:
-        screening["explainability"] = {
-            "gradCamAvailable": False,
-            "gradCamPath": None,
-            "evidenceAvailable": False,
-            "evidencePath": None,
-        }
+    # Explainability — real Grad-CAM/evidence overlays are persisted per case
+    # and exposed through safe, application-controlled API references.  The
+    # availability flags follow the artifacts actually written, so an honest
+    # absence (empty attention / plain overlay) stays 'unavailable'.  Evidence
+    # is advisory only and never feeds grade/referral.
+    explain_artifacts = {}
+    if explain_data and isinstance(explain_data, dict):
+        explain_artifacts = explain_data.pop("artifacts", {}) or {}
+
+    refs = artifacts_svc.save_explain_artifacts(
+        case_id,
+        attention=explain_artifacts.get("gradcam"),
+        evidence=explain_artifacts.get("evidence"),
+    )
+
+    screening["explainability"] = {
+        "gradCamAvailable": refs["gradcam"] is not None,
+        "gradCamPath": refs["gradcam"],
+        "evidenceAvailable": refs["evidence"] is not None,
+        "evidencePath": refs["evidence"],
+    }
 
     database_store.save_screening(case_id, screening)
     return screening
@@ -318,3 +325,25 @@ def get_case_image(case_id: str) -> Path:
             stage="storage",
         )
     return path
+
+
+def get_artifact_path(case_id: str, name: str) -> Path:
+    """Resolve a stored explainability artifact (Grad-CAM / evidence overlay).
+
+    The path is resolved strictly inside ARTIFACTS_DIR: case ids are shape
+    validated (before any storage lookup) and artifact names are whitelisted,
+    so no user input can escape the artifacts directory (path-traversal safe).
+    """
+    if not artifacts_svc.valid_case_id(case_id):
+        raise RetinaSenseError(
+            ErrorCode.ARTIFACT_UNAVAILABLE,
+            f"Malformed case id '{case_id}'.",
+            stage="artifacts",
+        )
+    if not database_store.case_exists(case_id):
+        raise RetinaSenseError(
+            ErrorCode.CASE_NOT_FOUND,
+            f"Case '{case_id}' not found.",
+            stage="storage",
+        )
+    return artifacts_svc.resolve_artifact_path(case_id, name)

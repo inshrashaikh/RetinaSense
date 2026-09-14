@@ -29,7 +29,11 @@ function result = locateOpticDisc(image, params, fovMask)
     if nargin < 2 || isempty(params)
         params = analysis_config();
     end
-    p = params.opticDisc;
+    if isfield(params, 'opticDisc')
+        p = params.opticDisc;
+    else
+        p = params;   % already the opticDisc sub-struct (analyzeRetina/test call)
+    end
 
     % Default honest empty result
     result = struct( ...

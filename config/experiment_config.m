@@ -88,7 +88,12 @@ function model = loadModelRecord(model)
     try
         rec = jsondecode(fileread(recFile));
         model.backbone  = rec.chosenBackbone;
-        model.metrics   = rec.perBackbone;
+        % perBackbone is the supplementary four-axis table; a valid decision
+        % record may omit it without invalidating the chosen backbone or the
+        % targets-met decision.
+        if isfield(rec, 'perBackbone')
+            model.metrics   = rec.perBackbone;
+        end
         model.available = rec.targetsMet;          % clinically acceptable => usable
     catch
         % A corrupt/partial record must not break pipeline startup; leave the

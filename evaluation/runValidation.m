@@ -82,9 +82,7 @@ function n = testNet(net)
 end
 
 function [lab, pred, probs, refProb] = predictOn(net, ds, cfg)
-    scores = predict(net, ds);
-    scores = double(scores);
-    probs  = scores ./ sum(scores, 2);
+    probs  = predictDatastore(net, ds, cfg);
     [~, pred] = max(probs, [], 2);
     lab   = double(ds.Labels) - 1;
     pred  = pred - 1;

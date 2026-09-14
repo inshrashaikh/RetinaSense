@@ -17,21 +17,26 @@ def _temp_data_dir(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("test_data")
     cases_dir = tmp / "cases"
     images_dir = tmp / "images"
+    artifacts_dir = tmp / "artifacts"
     db_path = tmp / "retinasense.db"
     cases_dir.mkdir(parents=True, exist_ok=True)
     images_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     # config values are bound by value at import time in local_store/case_id —
     # patch the module-level attributes so tests never touch real data/.
     cfg.CASES_DIR = cases_dir
     cfg.IMAGES_DIR = images_dir
+    cfg.ARTIFACTS_DIR = artifacts_dir
     cfg.DATABASE_PATH = db_path
     import app.storage.local_store as local_store
     import app.storage.database_store as database_store
+    import app.services.artifacts as artifacts
     import app.utils.case_id as case_id_mod
     local_store.CASES_DIR = cases_dir
     local_store.IMAGES_DIR = images_dir
     database_store.DATA_DIR = tmp
+    artifacts.ARTIFACTS_DIR = artifacts_dir
     case_id_mod._counter = None  # restart ID counter over the temp database
 
     from app.db.session import configure_database, init_db

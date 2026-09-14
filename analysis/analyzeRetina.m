@@ -11,7 +11,9 @@ function evidence = analyzeRetina(image, fovMask, params)
 %   orient temporal structures correctly (fovea placement).
 
     if nargin < 2; fovMask = []; end
-    if nargin < 3 || isempty(params); params = analysis_config(); end
+    if nargin < 3 || isempty(params) || isempty(fieldnames(params))
+        params = analysis_config();
+    end
 
     vesselMask = segmentVessels(image, params.vessels, fovMask);
     opticDisc  = locateOpticDisc(image, params.opticDisc, fovMask);

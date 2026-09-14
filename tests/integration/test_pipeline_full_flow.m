@@ -40,12 +40,10 @@ function test_fullMandatoryFlowOrderMock(testCase)
 end
 
 function test_mockModeRunsWithNoArtifacts(testCase)
-    % cfg.model.available=false (no benchmark record), mock=true -> no gate,
-    % no artifact load, honest mock grading, identity calibration.
-    cfg = experiment_config();
-    testCase.verifyTrue(~cfg.model.available, ...
-        'Precondition: no benchmark record in this workspace.');
-    c = runPipeline('scenario', 'good');
+    % Mock mode must never touch model artifacts: even when a benchmark record
+    % / trained model IS present in this workspace, mock=true forces the honest
+    % mock path (no gate, no artifact load, modelFile='', identity calibration).
+    c = runPipeline('scenario', 'good');          % default mock=true
     testCase.verifyEqual(c.grading.modelFile, '', ...
         'Mock mode must not claim a trained model.');
     testCase.verifyTrue(isfinite(c.calibrated.confidence), ...
@@ -204,18 +202,18 @@ function writeArtifact(testCase, name, payload)
 end
 
 function net = makeTestNet()
-    % A REAL (untrained) 224x224x3 SeriesNetwork, assembled from a layerGraph
+    % A REAL (untrained) 224x224x3 dlnetwork, assembled from a layerGraph
     % on the MATLAB host — never a fabricated/mock "model".
     layers = [imageInputLayer([224 224 3], 'Name', 'input') ...
         convolution2dLayer(3, 4, 'Padding', 'same', 'Name', 'conv1') ...
         reluLayer('Name', 'relu1') ...
         fullyConnectedLayer(5, 'Name', 'fc5') ...
         softmaxLayer('Name', 'softmax')];
-    net = assembleNetwork(layers);
+    net = dlnetwork(layerGraph(layers));
 end
 
 function tf = isToolboxAvailable()
-    tf = ~isempty(which('assembleNetwork')) && ...
+    tf = ~isempty(which('dlnetwork')) && ...
          ~isempty(which('imageInputLayer')) && ...
          ~isempty(which('gradCAM'));
 end

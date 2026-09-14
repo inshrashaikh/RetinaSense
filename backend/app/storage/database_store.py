@@ -274,6 +274,11 @@ def list_cases() -> list[dict[str, Any]]:
                 "eye": row.eye,
                 "phcId": row.phc_id,
                 "createdAt": row.created_at,
+                "referable": (
+                    (scr.ai_prediction or {}).get("referable")
+                    if scr is not None and scr.ai_prediction
+                    else None
+                ),
             }
         )
     return items
@@ -283,7 +288,7 @@ def case_stats() -> dict[str, Any]:
     """Aggregate counts used by the dashboard stat cards."""
     cases = list_cases()
     total = len(cases)
-    completed = sum(1 for c in cases if c["status"] == "completed")
+    completed = sum(1 for c in cases if c["status"] in ("completed", "reviewed"))
     pending = sum(1 for c in cases if c["status"] == "completed")
     recapture = sum(1 for c in cases if c["status"] == "recapture_required")
     reviewed = sum(1 for c in cases if c["status"] == "reviewed")

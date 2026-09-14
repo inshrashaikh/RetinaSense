@@ -112,7 +112,7 @@ export function CaseViewPage({ caseId }: { caseId: string }) {
             </section>
           )}
           <AiPredictionPanel ai={recapture ? null : data.aiPrediction} />
-          <ExplainabilityPanel explain={data.explainability} />
+          <ExplainabilityPanel caseId={caseId} explain={data.explainability} />
         </div>
       </div>
 

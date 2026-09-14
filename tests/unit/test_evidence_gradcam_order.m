@@ -169,8 +169,10 @@ function testRealNetReachesGradCAM(testCase)
     end
     net = makeTestNet();
     netArt = writeArtifact('evgc_test', net);
+    calArt = fullfile(paths().data.models, 'evgc_test_calib.mat');
+    saveCalibration(1.0, 'evgc_test');
     bench  = writeBenchmarkRecord('evgc_test');
-    cleanup = onCleanup(@() restoreAll(netArt, bench));
+    cleanup = onCleanup(@() restoreAll(netArt, calArt, bench));
 
     c = runPipeline('scenario', 'good', 'mock', false);
     verifyEqual(testCase, size(c.explain.gradCam), [size(c.image,1) size(c.image,2)]);
@@ -226,8 +228,9 @@ function b = writeBenchmarkRecord(backbone)
     fwrite(fid, jsonencode(rec)); fclose(fid);
 end
 
-function restoreAll(netArt, b)
+function restoreAll(netArt, calArt, b)
     deleteIfExists(netArt);
+    deleteIfExists(calArt);
     if b.present
         fid = fopen(b.file, 'w');
         fwrite(fid, b.text); fclose(fid);

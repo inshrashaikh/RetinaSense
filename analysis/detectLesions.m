@@ -253,7 +253,7 @@ function lesions = detectLesions(image, params)
         
         % Local vessel density
         seDense = strel('disk', 10);
-        vesselDensity = imfilter(single(vesselMask), single(seDense.getnhood()), 'conv', 'replicate');
+        vesselDensity = imfilter(double(vesselMask), double(seDense.getnhood()), 'conv', 'replicate');
         
         % Find high-density regions not explained by normal vessels
         % Threshold at high percentile

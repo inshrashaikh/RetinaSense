@@ -195,6 +195,18 @@ export async function fetchCaseImage(_caseId: string): Promise<Blob> {
   };
 }
 
+// The demo produces no explainability artifacts (see noExplainability above),
+// so an honest ARTIFACT_UNAVAILABLE keeps the panel state truthful.
+export async function fetchCaseArtifact(_caseId: string, name: string): Promise<Blob> {
+  await delay();
+  throw {
+    kind: 'http',
+    code: 'ARTIFACT_UNAVAILABLE',
+    message: `The demo client does not store or serve the ${name} artifact.`,
+    httpStatus: 404,
+  };
+}
+
 export async function submitReview(
   caseId: string,
   review: ReviewRequest,

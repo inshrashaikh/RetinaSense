@@ -1,0 +1,5 @@
+dataset,status,n_images,n_annotations,labels,split,purpose,manifest,loader,source
+aptos,AVAILABLE + NOT YET VALIDATED,3662,0,"grade 0-4 + folds.csv split",train/val/test 2929/366/367 (folds.csv),DR classifier train/val/test,"data/manifests/aptos_manifest.csv (+folds.csv)",loadDataset('aptos'),APTOS 2019
+idrid,AVAILABLE + STRUCTURE VALIDATED + COMPONENT VALIDATED (bounded),1113,363,"grade 0-4 (B), macular edema (B), seg masks (A: MA/HE/EX/SE/OD), OD/fovea center xy (C)",grading train=413 test=103 | localization train=413 test=103 | seg train=54 test=27,DR grade + lesion + optic-disc + fovea validation (external-only),"data/manifests/idrid_manifest.csv (+grading,segmentation,localization)",loadDataset('idrid'),IDRiD (Indian Diabetic Retinopathy Image Dataset)
+drive,NOT AVAILABLE,0,0,"",,,"",loadDataset('drive'),DRIVE
+messidor2,NOT AVAILABLE,0,0,"",,,"",loadDataset('messidor2'),Messidor-2

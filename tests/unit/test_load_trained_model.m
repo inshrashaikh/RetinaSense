@@ -99,8 +99,10 @@ function test_loadedNetReachesClassificationAndGradCAM(testCase)
     end
     net = makeTestNet();
     artFile = writeArtifact('reach_modules_test', net);
+    calArt  = fullfile(paths().data.models, 'reach_modules_test_calib.mat');
+    saveCalibration(1.0, 'reach_modules_test');
     bench   = writeBenchmarkRecord('reach_modules_test');
-    cleanup  = onCleanup(@() restoreAll(artFile, bench));
+    cleanup  = onCleanup(@() restoreAll(artFile, calArt, bench));
 
     c = runPipeline('scenario', 'good', 'mock', false);
     verifyTrue(testCase, ~isempty(c.grading.modelFile), ...
@@ -147,8 +149,9 @@ function b = writeBenchmarkRecord(backbone)
     fwrite(fid, jsonencode(rec)); fclose(fid);
 end
 
-function restoreAll(artFile, b)
+function restoreAll(artFile, calArt, b)
     deleteIfExists(artFile);
+    deleteIfExists(calArt);
     if b.present
         fid = fopen(b.file, 'w');
         fwrite(fid, b.text); fclose(fid);

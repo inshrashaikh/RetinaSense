@@ -12,7 +12,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import CASES_DIR, CORS_ORIGINS, IMAGES_DIR, MATLAB_ENGINE_AVAILABLE
+from .config import (
+    ARTIFACTS_DIR,
+    CASES_DIR,
+    CORS_ORIGINS,
+    IMAGES_DIR,
+    MATLAB_ENGINE_AVAILABLE,
+)
 from .db.session import configure_database, init_db
 from .routes import cases, health
 from .utils.errors import RetinaSenseError
@@ -23,6 +29,7 @@ async def lifespan(app: FastAPI):
     """Ensure data directories exist and initialise the database on startup."""
     CASES_DIR.mkdir(parents=True, exist_ok=True)
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     configure_database()
     init_db()
     yield

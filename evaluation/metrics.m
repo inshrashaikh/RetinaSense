@@ -78,9 +78,9 @@ end
 function k = qwk(lab, pred)
     % Quadratic weighted kappa over grades 0..4.
     w = abs((0:4)' - (0:4)) .^ 2;
-    N = histcounts(lab, -0.5:1:4.5)' * histcounts(pred, -0.5:1:4.5);
+    N = histcounts(lab, -0.5:1:4.5)' * histcounts(pred, -0.5:1:4.5) / numel(lab);
     obs = histcounts2(lab, pred, -0.5:1:4.5, -0.5:1:4.5);
-    k = 1 - sum(w .* obs) / max(1e-12, sum(w .* N));
+    k = 1 - sum(w .* obs, 'all') / max(1e-12, sum(w .* N, 'all'));
 end
 
 function e = ece(probs, labels)

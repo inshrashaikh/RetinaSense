@@ -6,7 +6,7 @@ engine. This is **prototype infrastructure, not production clinical software**.
 ## Tech stack
 
 - **Python 3.13** + **FastAPI** + **Pydantic v2**
-- **Local JSON/file storage** (no database, no cloud)
+- **SQLAlchemy 2.0** + **SQLite** (local database, no cloud)
 - **pytest** + **httpx** for API tests
 
 ## Scope
@@ -24,14 +24,18 @@ backend/
 │   ├── main.py                 # FastAPI app + error handler
 │   ├── config.py               # validation limits, paths, MATLAB flag
 │   ├── models/schemas.py       # Pydantic request/response models
+│   ├── db/                     # SQLAlchemy models + session
 │   ├── routes/                 # /api/health, /api/cases...
 │   ├── services/
 │   │   ├── matlab_adapter.py   # MATLAB Engine bridge (+ TEST-ONLY mock)
 │   │   ├── screening.py        # screen/review orchestration
-│   │   └── report.py           # report adapter (REPORT_UNAVAILABLE unless stored)
-│   ├── storage/local_store.py  # per-case JSON + image files
+│   │   ├── report.py           # report adapter (REPORT_UNAVAILABLE unless stored)
+│   │   └── artifacts.py        # Grad-CAM/evidence PNG persistence
+│   ├── storage/
+│   │   ├── database_store.py   # SQLAlchemy CRUD (all tables)
+│   │   └── local_store.py      # image byte I/O + path sanitisation
 │   └── utils/                  # errors.py, case_id.py
-├── tests/                      # 18 API/service tests
+├── tests/                      # 57 API/storage tests (pytest)
 ├── data/                       # runtime storage (gitignored)
 └── requirements.txt
 ```
@@ -89,9 +93,14 @@ Per case, under `backend/data/` (gitignored):
 
 ```
 data/
-├── cases/<caseId>/metadata.json, screening.json, review.json, report.json
-└── images/<caseId>/<sanitised filename>
+├── retinasense.db              # SQLite DB: cases, screening, reviews, decisions, reports
+├── images/<caseId>/<sanitised filename>   # image bytes on disk only
+└── artifacts/<caseId>/<gradcam|evidence>.png
 ```
+
+`screening_results` (AI), `human_reviews`, `final_decisions` and `reports`
+are separate tables — a human override never mutates the AI row. Image bytes
+stay on disk; the DB stores metadata + relative path only.
 
 Case IDs are opaque (`RS-2026-00001`), no patient PII is stored.
 
@@ -117,5 +126,5 @@ uvicorn app.main:app --reload        # http://127.0.0.1:8000
 
 ```bash
 cd backend
-python -m pytest tests -v
+python -m pytest tests -v       # 57 tests
 ```

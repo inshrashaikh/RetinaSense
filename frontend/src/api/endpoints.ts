@@ -77,6 +77,15 @@ export async function fetchCaseImage(caseId: string): Promise<Blob> {
   });
 }
 
+/** Fetch a real explainability artifact (gradcam | evidence) for a case. */
+export async function fetchCaseArtifact(caseId: string, name: string): Promise<Blob> {
+  if (isDemoMode) return demo.fetchCaseArtifact(caseId, name);
+  return apiRequestBlob(
+    `/api/cases/${encodeURIComponent(caseId)}/artifacts/${encodeURIComponent(name)}`,
+    { timeoutMs: 15_000 },
+  );
+}
+
 export async function submitReview(
   caseId: string,
   review: ReviewRequest,

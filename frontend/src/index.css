@@ -201,6 +201,28 @@ p { margin: 0.25rem 0; }
 
 .panel-final { border: 2px solid var(--brand); }
 
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.filter-tab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.filter-tab:hover { background: var(--surface-alt); }
+.filter-tab-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
 .empty-note {
   color: var(--ink-soft);
   background: var(--surface-alt);
@@ -306,6 +328,7 @@ input[type="file"] { font: inherit; }
   display: block;
 }
 .fundus-img-preview { max-height: 220px; margin-top: 4px; }
+.artifact-img { margin-top: 8px; max-height: 280px; }
 
 .image-placeholder {
   background: var(--surface-alt);

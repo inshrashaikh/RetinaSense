@@ -97,6 +97,8 @@ export interface CaseListItem {
   eye: string;
   phcId: string;
   createdAt: string | null;
+  /** Referable flag from the AI screening result (null until screened). */
+  referable?: boolean | null;
 }
 
 /** Aggregated counts used by the dashboard stat cards (GET /api/cases/stats). */

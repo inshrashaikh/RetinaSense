@@ -189,3 +189,17 @@ def generate_report(caseId: str) -> ReportResponse:
 def get_case_image(caseId: str) -> FileResponse:
     path = screening_svc.get_case_image(caseId)
     return FileResponse(path)
+
+
+# ---------- GET /api/cases/{caseId}/artifacts/{artifact} ----------
+@router.get("/api/cases/{caseId}/artifacts/{artifact}")
+def get_artifact(caseId: str, artifact: str) -> FileResponse:
+    """Serve a real explainability artifact (gradcam | evidence).
+
+    Only files produced by the pipeline and persisted under the application's
+    artifacts directory are served; the artifact name is whitelisted and the
+    case id shape-validated, so path traversal is not possible through this
+    endpoint.
+    """
+    path = screening_svc.get_artifact_path(caseId, artifact)
+    return FileResponse(path, media_type="image/png")

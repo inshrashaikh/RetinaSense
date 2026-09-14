@@ -107,7 +107,8 @@ end
 function testInvalidArtifactNoMetricsVar(testCase)
     b = tempBackbone(testCase);
     filepath = fullfile(paths().data.models, sprintf('%s_metrics.mat', b));
-    save(filepath, 'somethingElse');          % written by the TEST, not a module
+    somethingElse = struct('x', 1);               % written by the TEST, not a module
+    save(filepath, 'somethingElse');
     testCase.addTeardown(@deleteIfExists, filepath);
     cfg = experiment_config();
     cfg.model.backbone = b;

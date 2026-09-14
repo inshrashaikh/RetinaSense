@@ -53,11 +53,10 @@ end
 function [labels, preds, probs] = predictOnTest(net, ds, cfg)
 %PREDICTONTEST  Run inference and return Nx1 labels/preds, NxK probs.
     if isa(ds, 'matlab.io.datastore.ImageDatastore')
-        predsC   = classify(net, ds);
-        scores   = predict(net, ds);
+        probs    = predictDatastore(net, ds, cfg);
         labels   = double(ds.Labels) - 1;        % categorical -> 0..4
-        preds    = double(predsC) - 1;
-        probs    = double(scores);
+        [~, preds] = max(probs, [], 2);
+        preds    = preds - 1;
     else
         % Array + labels fallback: ds is a struct with .images (HxWx3xN) / .labels
         ims = single(ds.images) / 255;

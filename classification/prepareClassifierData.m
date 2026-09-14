@@ -6,7 +6,11 @@ function data = prepareClassifierData(manifestFile, inputSize)
 %
 %   manifestFile: path to a CSV with columns (docs/ARCHITECTURE.md §8):
 %                image, eye_id, grade, split, source
-%                image = absolute or repo-relative path to the fundus image.
+%                image = absolute, repo-relative, or dataset-image-root-
+%                relative path to the fundus image. Paths are resolved in
+%                that order against paths().root and paths().data.images
+%                (config/paths.m) — never against the current working
+%                directory, so the workflow runs from any cwd.
 %                split = train | val | test | external.
 %   inputSize:   [H W C] classifier input size (default from classification_config).
 %
@@ -77,7 +81,7 @@ function data = prepareClassifierData(manifestFile, inputSize)
     end
 
     % Inverse-frequency class weights over the TRAINING labels (imbalance).
-    yTr = data.train.Labels;
+    yTr = double(data.train.Labels) - 1;      % categorical -> numeric grade 0..4
     w = zeros(1, cfg.classification.numClasses);
     for g = 0:(cfg.classification.numClasses-1)
         c = sum(yTr == g);
@@ -94,16 +98,28 @@ function data = prepareClassifierData(manifestFile, inputSize)
 end
 
 function ds = buildDatastore(rows, root, cfg)
-%BUILDDATASTORE  Resolve image paths relative to repo root and create a
-% labeled imageDatastore with grade labels 0..4.
+%BUILDDATASTORE  Resolve image paths (config-driven, cwd-independent) and
+% create a labeled imageDatastore with grade labels 0..4.
+%
+% Path resolution priority (paths.m):
+%   1. as-is:  absolute path, or p already resolvable from the caller's cwd
+%   2. repo-relative:  fullfile(paths().root, p)
+%   3. images-relative: fullfile(paths().data.images, p)  (folds.csv convention)
+    imagesRoot = paths().data.images;
     files = cell(height(rows), 1);
     for i = 1:height(rows)
         p = rows.image(i);
-        if ~isempty(p) && ~isfile(p) && ~isfile(fullfile(root, p))
+        if ~isempty(p) && isfile(p)
+            files{i} = char(p);
+        elseif ~isempty(p) && isfile(fullfile(root, p))
+            files{i} = fullfile(root, char(p));
+        elseif ~isempty(p) && isfile(fullfile(imagesRoot, p))
+            files{i} = fullfile(imagesRoot, char(p));
+        else
             raiseError('prepareClassifierData', 'ImageMissing', ...
-                'Image row %d not found (tried ''%s'' and ''%s'').', i, p, fullfile(root, p));
+                'Image row %d not found (tried ''%s'', ''%s'', ''%s'').', ...
+                i, p, fullfile(root, p), fullfile(imagesRoot, p));
         end
-        if isfile(p); files{i} = char(p); else; files{i} = fullfile(root, char(p)); end
     end
     labels = rows.grade;
     ds = imageDatastore(files, 'Labels', categorical(labels, 0:(cfg.classification.numClasses-1)));

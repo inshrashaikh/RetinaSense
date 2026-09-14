@@ -150,6 +150,92 @@ def test_matlab_unavailable():
     assert exc_info.value.error_code == ErrorCode.MATLAB_ENGINE_UNAVAILABLE
 
 
+# ─── 7a. Real adapter maps ingest-stage decode failures -> 400 INVALID_IMAGE ──
+
+class _FakeEngine:
+    """Engine stub: raise the caller's exception from run_pipeline."""
+
+    def __init__(self, exc: Exception):
+        self._exc = exc
+
+    def runPipeline(self, meta, path, mode, mock, nargout=1):
+        raise self._exc
+
+    def addpath(self, *args, nargout=0):
+        pass
+
+    def genpath(self, *args):
+        return ""
+
+
+_INGEST_DECODE_MSG = (
+    "\n  File D:/retina/core/raiseError.m, line 26, in raiseError\n"
+    "  File D:/retina/preprocessing/ingestImage.m, line 49, in ingestImage\n"
+    "[ingestImage] Could not decode image: C:/uploads/scan.png\n"
+    "\nError in ingestImage (line 49)\n"
+)
+
+
+def test_adapter_maps_ingest_decode_failure_to_invalid_image():
+    from app.services.matlab_adapter import MatlabAdapter, _ingest_error_message
+    from app.utils.errors import RetinaSenseError, ErrorCode
+
+    adapter = MatlabAdapter(engine=_FakeEngine(RuntimeError(_INGEST_DECODE_MSG)))
+    with pytest.raises(RetinaSenseError) as exc_info:
+        adapter.run_pipeline("/tmp/scan.png", {})
+    assert exc_info.value.error_code == ErrorCode.INVALID_IMAGE
+    assert exc_info.value.stage == "ingestImage"
+    assert "Could not decode image" in exc_info.value.detail["error"]["message"]
+
+
+def test_ingest_error_message_extraction():
+    from app.services.matlab_adapter import _ingest_error_message
+
+    clean = _ingest_error_message(_INGEST_DECODE_MSG)
+    assert clean == "Could not decode image: C:/uploads/scan.png"
+    assert _ingest_error_message("no marker here").startswith("no marker here")
+
+
+def test_adapter_keeps_generic_engine_failure_as_503():
+    from app.services.matlab_adapter import MatlabAdapter
+    from app.utils.errors import RetinaSenseError, ErrorCode
+
+    adapter = MatlabAdapter(engine=_FakeEngine(RuntimeError("engine crashed")))
+    with pytest.raises(RetinaSenseError) as exc_info:
+        adapter.run_pipeline("/tmp/scan.png", {})
+    assert exc_info.value.error_code == ErrorCode.MATLAB_ENGINE_UNAVAILABLE
+    assert "MATLAB pipeline failed" in exc_info.value.detail["error"]["message"]
+
+
+# ─── 7d. Screen route -> 400 INVALID_IMAGE for undecodable uploads ─────────
+
+def test_screen_route_undecodable_image_is_400(monkeypatch, dummy_png_bytes):
+    """An upload that reaches the real ingest stage but cannot be decoded must
+    surface as 400 INVALID_IMAGE (input-data problem), and the case must NOT be
+    left in a completed state."""
+    from app.services.matlab_adapter import MatlabAdapter
+    import app.services.matlab_adapter as adapter_mod
+
+    monkeypatch.setattr(
+        adapter_mod,
+        "default_adapter",
+        lambda: MatlabAdapter(engine=_FakeEngine(RuntimeError(_INGEST_DECODE_MSG))),
+    )
+    case_id = _create_case()
+    resp = client.post(
+        f"/api/cases/{case_id}/screen",
+        files={"image": ("scan.png", dummy_png_bytes, "image/png")},
+    )
+    assert resp.status_code == 400
+    body = resp.json()["error"]
+    assert body["code"] == "INVALID_IMAGE"
+    assert body["stage"] == "ingestImage"
+
+    get_resp = client.get(f"/api/cases/{case_id}")
+    assert get_resp.status_code == 200
+    assert get_resp.json()["status"] == "created"
+
+
 # ─── 7b. Screen route -> structured 503 when MATLAB is not available ─────
 
 def test_screen_route_pipeline_unavailable():
@@ -466,6 +552,189 @@ def test_override_without_grade():
     )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "INVALID_REVIEW"
+
+
+# ─── 25. Explainability artifacts (real Grad-CAM / evidence) ───────────────
+
+def _artifact_arrays():
+    """Realistic pipeline-style overlays for a fake adapter: a non-empty
+    attention image and an evidence overlay with visible colour markers."""
+    import numpy as np
+    # Attention overlay: jet-like heat on one axis over a dark grayscale base.
+    base = np.zeros((32, 32), dtype=np.uint8)
+    heat = np.zeros((32, 32), dtype=np.float64)
+    heat[8:24, 8:24] = np.linspace(0.0, 1.0, 16)
+    cam = np.repeat(np.expand_dims(base + (heat * 120).astype(np.uint8), -1), 3, axis=-1)
+    cam[..., 2] = np.clip(cam[..., 2].astype(np.int16) + 100, 0, 255).astype(np.uint8)
+    # Evidence overlay: grayscale fundus copy + a red marker block.
+    gray = np.full((32, 32, 3), 140, dtype=np.uint8)
+    gray[10:16, 10:16] = [255, 0, 0]
+    return {"gradcam": cam, "evidence": gray}
+
+
+class _ArtifactAdapter:
+    """Fake adapter that emits real (non-fabricated for this test) overlays."""
+
+    def __init__(self, gradcam=None, evidence=None):
+        self._images = {"gradcam": gradcam, "evidence": evidence}
+
+    def run_pipeline(self, image_path, metadata):
+        data = _artifact_arrays()
+        return {
+            "quality": {"class": "good", "score": 0.9, "failureReasons": [],
+                        "recaptureReason": None, "recaptureInstruction": None},
+            "grading": {"rawProbs": [0.6, 0.2, 0.1, 0.05, 0.05], "grade": 0,
+                        "referableProb": 0.2, "referable": False},
+            "calibrated": {"calibratedProbs": [0.6, 0.2, 0.1, 0.05, 0.05],
+                           "confidence": 0.6, "uncertainty": 0.25, "reviewRequired": False},
+            "explain": {
+                "gradCamAvailable": True,
+                "gradCamPath": None,
+                "evidenceAvailable": True,
+                "evidencePath": None,
+                "artifacts": {
+                    "gradcam": data["gradcam"] if self._images["gradcam"] is not False else None,
+                    "evidence": data["evidence"] if self._images["evidence"] is not False else None,
+                },
+                "note": "Model attention - not proof of causality",
+            },
+        }
+
+
+def test_real_artifacts_persisted_and_served():
+    """Real overlays → valid gradCamPath/evidencePath, both served as PNG."""
+    import io as _io
+    from PIL import Image as _Image
+
+    case_id = _create_case()
+    result = screening_svc.run_screening(
+        case_id,
+        _io.BytesIO(b"\xff\xd8" + b"\x00" * 98),
+        filename="fundus.jpg",
+        content_type="image/jpeg",
+        adapter=_ArtifactAdapter(),
+    )
+    ex = result["explainability"]
+    assert ex["gradCamAvailable"] is True
+    assert ex["gradCamPath"] == f"/api/cases/{case_id}/artifacts/gradcam"
+    assert ex["evidenceAvailable"] is True
+    assert ex["evidencePath"] == f"/api/cases/{case_id}/artifacts/evidence"
+
+    # Verify via the API (what the frontend requests) returns a real PNG.
+    for name in ("gradcam", "evidence"):
+        resp = client.get(f"/api/cases/{case_id}/artifacts/{name}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/png")
+        assert resp.content
+        img = _Image.open(_io.BytesIO(resp.content))
+        assert img.size == (32, 32)
+
+    # The case response carries the paths too (persisted in the database).
+    case_resp = client.get(f"/api/cases/{case_id}")
+    assert case_resp.json()["explainability"]["gradCamPath"] == f"/api/cases/{case_id}/artifacts/gradcam"
+
+
+def test_artifacts_honestly_unavailable_without_content():
+    """No artifact content -> flagged unavailable and 404 on serve."""
+    case_id = _create_case()
+    result = screening_svc.run_screening(
+        case_id,
+        io.BytesIO(b"\xff\xd8" + b"\x00" * 98),
+        filename="fundus.jpg",
+        content_type="image/jpeg",
+        adapter=_ArtifactAdapter(gradcam=False, evidence=False),
+    )
+    ex = result["explainability"]
+    assert ex["gradCamAvailable"] is False
+    assert ex["gradCamPath"] is None
+    assert ex["evidenceAvailable"] is False
+    assert ex["evidencePath"] is None
+
+    resp = client.get(f"/api/cases/{case_id}/artifacts/gradcam")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
+
+
+def test_mock_screening_has_no_artifacts():
+    """The labelled mock never claims explainability artifacts."""
+    case_id = _create_case()
+    _upload_image(case_id)  # MockMatlabAdapter (good) — honest no-overlay
+    resp = client.get(f"/api/cases/{case_id}")
+    ex = resp.json()["explainability"]
+    assert ex["gradCamAvailable"] is False
+    assert ex["gradCamPath"] is None
+    assert ex["evidenceAvailable"] is False
+    assert ex["evidencePath"] is None
+
+
+# ─── 26. Artifact endpoint security (path traversal) ──────────────────────
+
+def test_artifact_endpoint_blocks_traversal_names():
+    """Artifact names are whitelisted — anything else is a 404, never a file."""
+    case_id = _create_case()
+    screening_svc.run_screening(
+        case_id,
+        io.BytesIO(b"\xff\xd8" + b"\x00" * 98),
+        filename="fundus.jpg",
+        content_type="image/jpeg",
+        adapter=_ArtifactAdapter(),
+    )
+    for evil in ("../config.py", "..%2f..%2fretinasense.db", "config", "gradcam.png", "gradcam/../config"):
+        resp = client.get(f"/api/cases/{case_id}/artifacts/{evil}")
+        assert resp.status_code in (404, 422), resp.text
+        assert "error" not in resp.text or resp.json().get("error", {}).get("code") in (
+            "ARTIFACT_UNAVAILABLE", "CASE_NOT_FOUND", "NOT_FOUND",
+        )
+
+
+def test_artifact_resolver_rejects_malformed_case_id():
+    from app.services import screening as svc
+    from app.utils.errors import RetinaSenseError, ErrorCode
+
+    for evil_id in (
+        "RS-2026-00001/../..",
+        "..%2f..%2fetc",
+        "../config.py",
+        "RS-2026-00001..",
+        "not-a-case-id",
+    ):
+        with pytest.raises(RetinaSenseError) as ei:
+            svc.get_artifact_path(evil_id, "gradcam")
+        assert ei.value.error_code == ErrorCode.ARTIFACT_UNAVAILABLE
+
+
+def test_artifact_missing_for_case_without_screening():
+    case_id = _create_case()
+    resp = client.get(f"/api/cases/{case_id}/artifacts/gradcam")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
+
+
+# ─── 27. Adapter-level array extraction ────────────────────────────────────
+
+def test_extract_explain_artifacts_handles_content():
+    import numpy as np
+    from app.services.matlab_adapter import _extract_explain_artifacts
+
+    att = np.zeros((8, 8, 3), dtype=np.uint8)
+    att[2, 2] = [255, 0, 0]
+    evi = np.full((8, 8, 3), 100, dtype=np.uint8)
+    evi[4, 4] = [0, 255, 0]
+    out = _extract_explain_artifacts({"explain": {"attentionImage": att, "evidenceOverlay": evi}})
+    assert out["gradcam"] is not None and out["gradcam"].shape == (8, 8, 3)
+    assert out["evidence"] is not None and out["evidence"].shape == (8, 8, 3)
+
+
+def test_extract_explain_artifacts_drops_empty_content():
+    import numpy as np
+    from app.services.matlab_adapter import _extract_explain_artifacts
+
+    zero_att = np.zeros((8, 8, 3), dtype=np.uint8)
+    plain_evi = np.full((8, 8, 3), 120, dtype=np.uint8)  # colourless -> no markers
+    out = _extract_explain_artifacts({"explain": {"attentionImage": zero_att, "evidenceOverlay": plain_evi}})
+    assert out["gradcam"] is None
+    assert out["evidence"] is None
+    assert _extract_explain_artifacts({"explain": None}) == {"gradcam": None, "evidence": None}
 
 
 # ─── 19. Case stats endpoint ──────────────────────────────────────────────

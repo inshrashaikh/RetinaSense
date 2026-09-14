@@ -60,12 +60,15 @@ function grading = realGrading(image, net, cfg, referThreshold)
         'grade',         grade, ...
         'referableProb', referableProb, ...
         'referable',     referable, ...
-        'modelFile',     getNetName(net));
+        'modelFile',     getNetName(net, cfg));
 end
 
-function name = getNetName(net)
+function name = getNetName(net, cfg)
     if isa(net, 'nnet.cnn.LayerGraph'); name = 'layerGraph'; return; end
     if isprop(net, 'Name') && ~isempty(net.Name); name = net.Name; return; end
+    if isfield(cfg.model, 'backbone') && ~isempty(cfg.model.backbone)
+        name = sprintf('%s_dr_aptos.mat', cfg.model.backbone); return;
+    end
     name = '(untitled network)';
 end
 

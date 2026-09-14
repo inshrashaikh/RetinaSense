@@ -50,6 +50,10 @@ const CODE_MESSAGES: Record<string, FriendlyError> = {
     title: 'Image not available',
     detail: 'No fundus image is stored for this case on the backend.',
   },
+  ARTIFACT_UNAVAILABLE: {
+    title: 'Explainability image not available',
+    detail: 'The backend has no Grad-CAM or evidence overlay stored for this case. Nothing is fabricated.',
+  },
   INTERNAL_ERROR: {
     title: 'Backend error',
     detail: 'The backend reported an internal error. Please try again.',

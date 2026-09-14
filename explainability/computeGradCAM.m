@@ -36,6 +36,7 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
                 gradCam = imresize(scoreMap, [h w]);
                 gradCam = (gradCam - min(gradCam(:))) / ...
                     max(eps, max(gradCam(:)) - min(gradCam(:)));
+                gradCam = double(gradCam);   % §4.5 contract: double heatmap
             end
         catch
             % Invalid layer / unsupported network: honest zero heatmap, note why.
@@ -56,12 +57,16 @@ function explain = computeGradCAM(image, net, grading, evidence, params)
     end
 
     % ---- Evidence overlay (independent of attention) ----
-    % Maps lesion candidates + optic disc onto image.
+    % Maps lesion candidates + optic disc onto image. Only an actually
+    % detected optic disc is drawn (honest empty: a not-detected disc leaves
+    % the overlay as the plain image rather than stamping status text on it).
     evidenceOverlay = repmat(im2uint8(rgb2gray(image)), [1 1 3]);
     if isfield(evidence, 'lesions') && ~isempty(evidence.lesions)
         evidenceOverlay = overlayLesions(evidenceOverlay, evidence.lesions);
     end
-    if isfield(evidence, 'opticDiscDetail') && isstruct(evidence.opticDiscDetail)
+    if isfield(evidence, 'opticDiscDetail') && isstruct(evidence.opticDiscDetail) ...
+            && isfield(evidence.opticDiscDetail, 'center') ...
+            && ~isempty(evidence.opticDiscDetail.center)
         try
             evidenceOverlay = overlayOpticDisc(evidenceOverlay, evidence.opticDiscDetail);
         catch
@@ -85,11 +90,12 @@ function scoreMap = runGradCAM(net, image, grading, params)
         return;                                                % unsupported type
     end
 
-    % Match the classifier input size at the config source (same resize that
-    % classification/classifyImage.m applies for prediction), so Grad-CAM and
-    % grading always use one consistent, config-driven size per backbone.
+    % Match the classifier input size at the config source (same resize and
+    % normalization that classification/classifyImage.m applies for prediction),
+    % so Grad-CAM and grading always use one consistent, config-driven input
+    % pipeline per backbone.
     inputSize = experiment_config().classification.classify.inputSize(1:2);
-    im = dlarray(single(imresize(image, inputSize)), 'SSCB');
+    im = dlarray(single(imresize(image, inputSize)) / 255, 'SSCB');
 
     % Class index to explain: the graded class (referable decision class).
     label = grading.grade + 1;

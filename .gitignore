@@ -1,3 +1,9 @@
+# IDRiD raw dataset (official IEEE DataPort distribution): fundus images,
+# segmentation masks, grading/location markups, license PDFs. Tracked
+# manifests live under data/manifests/ (committed); bound image/annotation
+# data must never be committed.
+data/raw/IDRiD/
+
 # Biomedical datasets and derived tensors (licensing: APTOS, IDRiD, DRIVE,
 # Messidor-2 require access agreements) - never commit.
 data/raw/
@@ -44,3 +50,5 @@ Thumbs.db
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+slprj/
+tests/_last_run.csv

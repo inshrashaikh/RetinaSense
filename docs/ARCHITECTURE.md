@@ -412,7 +412,7 @@ RetinaSense/
 - `{backbone}_calib.mat` — fitted temperature T
 - `{backbone}_metrics.mat` — hold-out + benchmark metrics
 
-**Data** (manifests): `folds.csv`, `train.csv`, `val.csv`, `test.csv`; columns `image, eye_id, grade(0–4), split, source`. **Messidor-2 kept out of train/val/hyperparams; touched only by external validation** (PRD §7).
+**Data** (manifests): `folds.csv`, `train.csv`, `val.csv`, `test.csv`; columns `image, eye_id, grade(0–4), split, source`. `image` is an absolute, repo-relative, or dataset-image-root-relative path; resolution is config-driven (`config/paths.m → data.images`, the primary fundus image root) and never depends on the working directory. **Messidor-2 kept out of train/val/hyperparams; touched only by external validation** (PRD §7).
 
 **Augmentation** in `prepareClassifierData.m` (flip/rotate/scale/color-jitter), fixed seed, class weights / focal loss for imbalance.
 

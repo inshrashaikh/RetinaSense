@@ -38,8 +38,8 @@ function r = report_config()
 
     % ---- Image Rendering ----
     r.image = struct( ...
-        'maxWidthInches',  5.5,   % max width for image panels
-        'maxHeightInches', 4.0,   % max height for image panels
+        'maxWidthInches',  5.5, ... % max width for image panels
+        'maxHeightInches', 4.0, ... % max height for image panels
         'interpolation',   'bilinear', ...
         'showColorbar',    false);
 

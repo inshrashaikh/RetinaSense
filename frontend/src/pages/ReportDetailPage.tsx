@@ -137,7 +137,7 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
         </div>
         <div className="case-column">
           <AiPredictionPanel ai={ai} />
-          <ExplainabilityPanel explain={explain} />
+          <ExplainabilityPanel caseId={caseId} explain={explain} />
         </div>
       </div>
 

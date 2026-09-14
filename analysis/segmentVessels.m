@@ -25,7 +25,7 @@ function vesselMask = segmentVessels(image, params, fovMask)
     end
 
     % Default honest empty result
-    vesselMask = [];
+    vesselMask = logical([]);
 
     % Validate input
     if isempty(image) || ndims(image) ~= 3 || size(image, 3) ~= 3
