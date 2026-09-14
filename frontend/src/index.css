@@ -16,10 +16,11 @@
 :root {
   /* Surfaces — warm off-white / ivory foundation.
      No pure #ffffff anywhere: every surface leans warm clinical. */
-  --rs-bg: #f7f5f2;
-  --rs-bg-subtle: #f0f8f4;
-  --rs-surface: #fefefe;
-  --rs-surface-warm: #fdfdfc;
+  --rs-bg: #f7f5f0;
+  --rs-bg-subtle: #f1f7f2;
+  --rs-surface: #fdfcf9;
+  --rs-surface-warm: #faf8f3;
+  --rs-surface-raised: #fffefa;
   --rs-mint: #f0f8f4;
   --rs-honeydew: #eaf6ef;
   --rs-honeydew-strong: #dff0e6;
@@ -48,16 +49,16 @@
   --rs-accent-soft: #e7f4f1;
 
   /* Text — deep blue/teal for clear hierarchy */
-  --rs-heading: #0f2522;
-  --rs-text: #2c3b37;
-  --rs-text-soft: #4d5f59;
+  --rs-heading: #102b29;
+  --rs-text: #2d403b;
+  --rs-text-soft: #4e625b;
   /* AA-compliant on every surface in the palette (white, mint, honeydew) */
   --rs-muted: #5e6e68;
 
   /* Borders — very subtle neutral lines */
-  --rs-border: #e1ece5;
-  --rs-border-soft: #eaf0ec;
-  --rs-border-strong: #c3d7ce;
+  --rs-border: #dde8e1;
+  --rs-border-soft: #e8efea;
+  --rs-border-strong: #bed3c9;
 
   /* Semantic status */
   --rs-success-bg: #e8f5ec;
@@ -444,6 +445,11 @@ hr {
   transform: translateY(0.5px);
 }
 
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--rs-clinical-ring);
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -558,7 +564,7 @@ hr {
    7. Cards
    -------------------------------------------------------------------------- */
 .card {
-  background: var(--rs-surface);
+  background: var(--rs-surface-raised);
   border: 1px solid var(--rs-border);
   border-radius: var(--rs-radius-lg);
   box-shadow: var(--rs-shadow-sm);
@@ -1463,7 +1469,7 @@ input[type="file"] {
 .sidebar {
   width: var(--rs-sidebar-w);
   flex: none;
-  background: var(--rs-surface);
+  background: var(--rs-surface-warm);
   border-right: 1px solid var(--rs-border);
   display: flex;
   flex-direction: column;
@@ -1485,6 +1491,7 @@ input[type="file"] {
   text-align: left;
   width: 100%;
   transition: background var(--rs-transition);
+  border-bottom: 1px solid var(--rs-border-soft);
 }
 .sidebar__brand:hover .brand-text strong {
   color: var(--rs-primary);
@@ -1498,12 +1505,12 @@ input[type="file"] {
   height: 38px;
   flex: none;
   border-radius: 11px;
-  background: var(--rs-primary);
+  background: #176b5b;
   color: #fff;
   font-weight: 700;
   font-size: var(--rs-text-sm);
   letter-spacing: 0.02em;
-  box-shadow: var(--rs-shadow-xs);
+  box-shadow: 0 0 0 4px var(--rs-primary-soft), var(--rs-shadow-xs);
 }
 
 .brand-text {
@@ -1615,14 +1622,12 @@ input[type="file"] {
   justify-content: space-between;
   gap: var(--rs-space-4);
   padding: var(--rs-space-3) var(--rs-space-6);
-  background: color-mix(in srgb, var(--rs-surface) 90%, transparent);
+  background: var(--rs-surface-warm);
   border-bottom: 1px solid var(--rs-border);
   position: sticky;
   top: 0;
   z-index: 30;
   min-height: 62px;
-  -webkit-backdrop-filter: saturate(180%);
-  backdrop-filter: saturate(180%);
 }
 
 .topbar__left {
@@ -1663,7 +1668,7 @@ input[type="file"] {
 
 .app-footer {
   border-top: 1px solid var(--rs-border);
-  background: var(--rs-surface);
+  background: var(--rs-surface-warm);
   padding: var(--rs-space-5) var(--rs-space-6);
   margin-top: auto;
 }
@@ -1689,7 +1694,9 @@ input[type="file"] {
    16. Landing page
    -------------------------------------------------------------------------- */
 .landing {
-  background: var(--rs-bg);
+  background:
+    radial-gradient(circle at 88% 4%, rgba(223, 240, 230, 0.52), transparent 25rem),
+    var(--rs-bg);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -1741,10 +1748,8 @@ input[type="file"] {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: color-mix(in srgb, var(--rs-surface) 88%, transparent);
+  background: color-mix(in srgb, var(--rs-surface-warm) 96%, transparent);
   border-bottom: 1px solid var(--rs-border-soft);
-  -webkit-backdrop-filter: saturate(180%);
-  backdrop-filter: saturate(180%);
 }
 
 .l-nav__inner {
@@ -1823,7 +1828,7 @@ input[type="file"] {
 /* -- Hero -- */
 .l-hero {
   padding: var(--rs-space-10) 0 var(--rs-space-8);
-  background: linear-gradient(180deg, var(--rs-honeydew) 0%, var(--rs-bg) 78%);
+  background: linear-gradient(180deg, #edf6f0 0%, var(--rs-bg) 82%);
 }
 
 .l-hero__grid {
@@ -1891,7 +1896,7 @@ input[type="file"] {
   gap: var(--rs-space-3);
   padding: var(--rs-space-3) var(--rs-space-4);
   border-radius: var(--rs-radius);
-  background: color-mix(in srgb, var(--rs-surface) 82%, transparent);
+  background: var(--rs-surface-raised);
   border: 1px solid var(--rs-border-soft);
   color: var(--rs-text-soft);
   font-size: var(--rs-text-sm);
@@ -1910,7 +1915,7 @@ input[type="file"] {
   border-radius: var(--rs-radius-xl);
   overflow: hidden;
   border: 1px solid var(--rs-border-strong);
-  background: var(--rs-mint);
+  background: var(--rs-surface-warm);
   box-shadow: var(--rs-shadow-lg);
   aspect-ratio: 4 / 3;
 }
@@ -1963,14 +1968,12 @@ input[type="file"] {
   gap: var(--rs-space-2);
   padding: 8px 12px;
   border-radius: var(--rs-radius-pill);
-  background: color-mix(in srgb, var(--rs-surface) 88%, transparent);
+  background: var(--rs-surface-raised);
   border: 1px solid var(--rs-border-soft);
   color: var(--rs-text-soft);
   font-size: var(--rs-text-sm);
   width: fit-content;
   box-shadow: var(--rs-shadow-xs);
-  -webkit-backdrop-filter: saturate(180%);
-  backdrop-filter: saturate(180%);
   -webkit-font-smoothing: antialiased;
 }
 .l-hero__caption svg {
@@ -2346,7 +2349,7 @@ input[type="file"] {
   overflow: hidden;
   border-radius: var(--rs-radius-xl);
   padding: var(--rs-space-9) var(--rs-space-8);
-  background: linear-gradient(135deg, #12564a 0%, #176b5b 55%, #1f7563 100%);
+  background: #176b5b;
   color: #eaf6ef;
   display: flex;
   align-items: center;
@@ -2400,7 +2403,7 @@ input[type="file"] {
 
 /* -- Footer -- */
 .l-footer {
-  background: var(--rs-surface);
+  background: var(--rs-surface-warm);
   border-top: 1px solid var(--rs-border);
   padding: var(--rs-space-9) 0 var(--rs-space-6);
 }
@@ -2896,6 +2899,21 @@ input[type="file"] {
   .l-container {
     padding: 0 var(--rs-space-4);
   }
+  .l-hero__actions,
+  .l-cta__actions {
+    width: 100%;
+  }
+  .l-hero__actions .btn,
+  .l-cta__actions .btn {
+    flex: 1 1 100%;
+  }
+  .l-hero__caption {
+    left: var(--rs-space-3);
+    right: var(--rs-space-3);
+    bottom: var(--rs-space-3);
+    width: auto;
+    font-size: var(--rs-text-xs);
+  }
   .l-stats {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2953,6 +2971,22 @@ input[type="file"] {
   .health-chip__dot {
     /* Keep the indicator level with the first line once the label wraps. */
     margin-top: 6px;
+  }
+}
+
+/* Hover affordances belong to pointer devices only. This keeps touch screens
+   calm after a tap while retaining useful desktop feedback. */
+@media (hover: none) {
+  .card:not(.card--mint):not(.card--accent):hover,
+  .stat-card:hover,
+  .l-stat:hover,
+  .l-flow__step:hover,
+  .l-feature:hover {
+    transform: none;
+    box-shadow: var(--rs-shadow-xs);
+  }
+  .table tbody tr:hover {
+    background: transparent;
   }
 }
 
