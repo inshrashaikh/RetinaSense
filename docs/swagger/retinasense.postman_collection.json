@@ -1,0 +1,484 @@
+{
+  "info": {
+    "name": "RetinaSense Backend API",
+    "description": "Prototype REST API bridging the web frontend to the MATLAB AI engine.\n\nFlow:\n1. Create Case -> 2. Screen Case (multipart fundus image) -> 3. Get Case -> 4. Generate Report -> 5. Submit Review -> 6. Regenerate Report.\n\nRun in this order with the Collection Runner so the Create Case script sets {{caseId}} automatically. Error responses use { \"error\": { \"code\": ... } }.",
+    "version": "0.1.0-prototype",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "caseId",
+      "value": "RS-2026-00001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Root \u2014 service info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Service info",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"service\": \"RetinaSense Backend\",\n  \"version\": \"0.1.0-prototype\",\n  \"health\": \"/api/health\",\n  \"docs\": \"/docs\",\n  \"matlabEngine\": \"unavailable\",\n  \"note\": \"Screening decision-support prototype. No clinical diagnosis.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Healthy",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/health"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"status\": \"ok\",\n  \"matlabEngine\": false,\n  \"version\": \"0.1.0-prototype\",\n  \"database\": \"ok\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Create case",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('created case', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) { pm.collectionVariables.set('caseId', pm.response.json().caseId); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "patientId",
+              "value": "PAT-2026-0001",
+              "type": "string"
+            },
+            {
+              "key": "eye",
+              "value": "left",
+              "type": "string"
+            },
+            {
+              "key": "phcId",
+              "value": "PHC-7",
+              "type": "string"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cases",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "201 Created",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases"
+          },
+          "status": "Created",
+          "code": 201,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"status\": \"created\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "List cases",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Case list",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cases"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "[\n  {\n    \"caseId\": \"RS-2026-00001\",\n    \"status\": \"completed\",\n    \"patientId\": \"PAT-2026-0001\",\n    \"eye\": \"left\",\n    \"phcId\": \"PHC-7\",\n    \"createdAt\": \"2026-09-14T12:00:00+00:00\"\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Case stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/stats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "stats"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Stats",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cases/stats"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"totalCases\": 3,\n  \"screeningsCompleted\": 2,\n  \"pendingReviews\": 1,\n  \"recaptureRequired\": 0,\n  \"reviewed\": 1,\n  \"created\": 0\n}"
+        }
+      ]
+    },
+    {
+      "name": "Screen case (multipart image upload)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('screening completed', function () { pm.response.to.have.status(200); });",
+              "pm.test('has quality class', function () {",
+              "  pm.response.to.have.jsonBody('quality.class');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "multipart/form-data"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "image",
+              "type": "file",
+              "src": [],
+              "description": "Fundus photograph (JPEG/PNG, < 20 MB)"
+            },
+            {
+              "key": "patientId",
+              "value": "PAT-2026-0001",
+              "type": "text"
+            },
+            {
+              "key": "eye",
+              "value": "left",
+              "type": "text"
+            },
+            {
+              "key": "phcId",
+              "value": "PHC-7",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/screen",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "screen"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Completed (good)",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/screen"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"status\": \"completed\",\n  \"quality\": {\n    \"class\": \"good\",\n    \"score\": 0.91,\n    \"failureReasons\": [],\n    \"recaptureReason\": null,\n    \"recaptureInstruction\": null\n  },\n  \"aiPrediction\": {\n    \"grade\": 0,\n    \"gradeLabel\": \"No DR\",\n    \"referable\": false,\n    \"confidence\": 0.58,\n    \"uncertainty\": 0.25,\n    \"reviewRequired\": false\n  },\n  \"explainability\": {\n    \"gradCamAvailable\": false,\n    \"gradCamPath\": null,\n    \"evidenceAvailable\": false,\n    \"evidencePath\": null\n  },\n  \"humanReview\": null,\n  \"finalDecision\": null\n}"
+        },
+        {
+          "name": "200 Recapture required (ungradable)",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/screen"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"status\": \"recapture_required\",\n  \"quality\": {\n    \"class\": \"ungradable\",\n    \"score\": 0.12,\n    \"failureReasons\": [\n      \"illumination\",\n      \"fovCoverage\"\n    ],\n    \"recaptureReason\": \"LOW_ILLUMINATION\",\n    \"recaptureInstruction\": \"Image is too dark. Please re-capture with adequate lighting.\"\n  },\n  \"aiPrediction\": {\n    \"grade\": null,\n    \"gradeLabel\": null,\n    \"referable\": null,\n    \"confidence\": null,\n    \"uncertainty\": null,\n    \"reviewRequired\": null\n  },\n  \"explainability\": {\n    \"gradCamAvailable\": false,\n    \"gradCamPath\": null,\n    \"evidenceAvailable\": false,\n    \"evidencePath\": null\n  },\n  \"humanReview\": null,\n  \"finalDecision\": null\n}"
+        },
+        {
+          "name": "503 MATLAB unavailable",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/screen"
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "body": "{\n  \"error\": { \"code\": \"MATLAB_ENGINE_UNAVAILABLE\", \"message\": \"...\", \"stage\": \"matlab_adapter\" }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get case",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Case",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"status\": \"completed\",\n  \"quality\": { \"class\": \"good\", \"score\": 0.91, \"failureReasons\": [], \"recaptureReason\": null, \"recaptureInstruction\": null },\n  \"aiPrediction\": { \"grade\": 0, \"gradeLabel\": \"No DR\", \"referable\": false, \"confidence\": 0.58, \"uncertainty\": 0.25, \"reviewRequired\": false },\n  \"explainability\": { \"gradCamAvailable\": false, \"gradCamPath\": null, \"evidenceAvailable\": false, \"evidencePath\": null },\n  \"humanReview\": null,\n  \"finalDecision\": null\n}"
+        }
+      ]
+    },
+    {
+      "name": "Generate report (POST)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/report",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "report"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Report",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/report"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"report\": {\n    \"caseId\": \"RS-2026-00001\",\n    \"status\": \"completed\",\n    \"patientId\": \"PAT-2026-0001\",\n    \"eye\": \"left\",\n    \"phcId\": \"PHC-7\",\n    \"quality\": {\n      \"class\": \"good\"\n    },\n    \"aiPrediction\": {\n      \"grade\": 0\n    },\n    \"disclaimer\": \"Screening decision-support only. Not a diagnosis and not a replacement for an ophthalmologist.\"\n  },\n  \"summary\": \"Case RS-2026-00001 (eye left) Quality: Good (score 91%). AI grade: 0 (No DR), referable: no. No human review recorded yet. Screening decision-support only. Not a diagnosis and not a replacement for an ophthalmologist.\",\n  \"disclaimer\": \"Screening decision-support only. Not a diagnosis and not a replacement for an ophthalmologist.\"\n}"
+        },
+        {
+          "name": "404 No screening yet",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/report"
+          },
+          "status": "Not Found",
+          "code": 404,
+          "body": "{\n  \"error\": { \"code\": \"REPORT_UNAVAILABLE\", \"message\": \"No screening has been run for this case yet.\", \"stage\": \"reporting\" }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get report (GET)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/report",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "report"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Stored report",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/report"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"report\": { ... },\n  \"summary\": \"...\",\n  \"disclaimer\": \"Screening decision-support only.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Submit human review",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"approve\",\n  \"reviewerId\": \"OPH-1\",\n  \"overrideGrade\": null,\n  \"finalReferral\": null,\n  \"notes\": \"Looks good.\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/review",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "review"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 Reviewed",
+          "originalRequest": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/review"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "{\n  \"caseId\": \"RS-2026-00001\",\n  \"review\": {\n    \"action\": \"approve\",\n    \"reviewerId\": \"OPH-1\",\n    \"overrideGrade\": null,\n    \"finalReferral\": false,\n    \"status\": \"approved\",\n    \"notes\": \"Looks good.\",\n    \"timestamp\": null\n  },\n  \"finalDecision\": {\n    \"grade\": 0,\n    \"gradeLabel\": \"No DR\",\n    \"referral\": false\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get case image",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/cases/{{caseId}}/image",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "cases",
+            "{{caseId}}",
+            "image"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 JPEG bytes",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/image"
+          },
+          "status": "OK",
+          "code": 200,
+          "body": "(binary image bytes)",
+          "_postman_previewlanguage": "binary"
+        },
+        {
+          "name": "404 No image",
+          "originalRequest": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cases/{{caseId}}/image"
+          },
+          "status": "Not Found",
+          "code": 404,
+          "body": "{\n  \"error\": { \"code\": \"IMAGE_UNAVAILABLE\", \"message\": \"No fundus image is stored for case.\", \"stage\": \"storage\" }\n}"
+        }
+      ]
+    }
+  ]
+}
