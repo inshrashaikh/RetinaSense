@@ -1,0 +1,1067 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RetinaSense Backend",
+    "description": "REST API for the RetinaSense diabetic retinopathy screening system. Bridges the web frontend to the MATLAB AI engine.\n\n## How to run\n1. Start the backend:  `cd backend && RETINASENSE_SIMULATION=mock ../.venv/bin/uvicorn app.main:app --port 8000`\n2. Default base URL: `http://127.0.0.1:8000` (CORS allows the Vite dev/preview origins).\n\n## Screening flow (collection runner order)\n`POST /api/cases` -> `POST /api/cases/{caseId}/screen` (multipart image upload) -> `GET /api/cases/{caseId}` -> `POST /api/cases/{caseId}/report` -> `POST /api/cases/{caseId}/review` -> `POST /api/cases/{caseId}/report` (regenerate with the review) -> `GET /api/cases` and `GET /api/cases/{caseId}/image`.\n\n## Modes\n- Default: real `MatlabAdapter` -> raises **503 MATLAB_ENGINE_UNAVAILABLE** until MATLAB + trained artifacts exist on the host.\n- `RETINASENSE_SIMULATION=mock`: uses the clearly-labelled demo adapter so the whole flow works without MATLAB. Mock output is never clinical.",
+    "version": "0.1.0-prototype"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root Status",
+        "description": "Basic service information and status for the RetinaSense backend.",
+        "operationId": "root_status__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Root Status  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases": {
+      "get": {
+        "summary": "List Cases",
+        "operationId": "list_cases_api_cases_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CaseListItem"
+                  },
+                  "type": "array",
+                  "title": "Response List Cases Api Cases Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Case",
+        "operationId": "create_case_api_cases_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_case_api_cases_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/stats": {
+      "get": {
+        "summary": "Get Stats",
+        "operationId": "get_stats_api_cases_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}/screen": {
+      "post": {
+        "summary": "Screen Case",
+        "operationId": "screen_case_api_cases__caseId__screen_post",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_screen_case_api_cases__caseId__screen_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}": {
+      "get": {
+        "summary": "Get Case",
+        "operationId": "get_case_api_cases__caseId__get",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}/review": {
+      "post": {
+        "summary": "Review Case",
+        "operationId": "review_case_api_cases__caseId__review_post",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}/report": {
+      "get": {
+        "summary": "Get Report",
+        "operationId": "get_report_api_cases__caseId__report_get",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Generate Report",
+        "operationId": "generate_report_api_cases__caseId__report_post",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}/image": {
+      "get": {
+        "summary": "Get Case Image",
+        "operationId": "get_case_image_api_cases__caseId__image_get",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AiPrediction": {
+        "properties": {
+          "grade": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "gradeLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gradelabel"
+          },
+          "referable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referable"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uncertainty"
+          },
+          "reviewRequired": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewrequired"
+          }
+        },
+        "type": "object",
+        "title": "AiPrediction"
+      },
+      "Body_create_case_api_cases_post": {
+        "properties": {
+          "patientId": {
+            "type": "string",
+            "title": "Patientid",
+            "default": ""
+          },
+          "eye": {
+            "type": "string",
+            "title": "Eye",
+            "default": ""
+          },
+          "phcId": {
+            "type": "string",
+            "title": "Phcid",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Body_create_case_api_cases_post"
+      },
+      "Body_screen_case_api_cases__caseId__screen_post": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Image"
+          },
+          "patientId": {
+            "type": "string",
+            "title": "Patientid",
+            "default": ""
+          },
+          "eye": {
+            "type": "string",
+            "title": "Eye",
+            "default": ""
+          },
+          "phcId": {
+            "type": "string",
+            "title": "Phcid",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_screen_case_api_cases__caseId__screen_post"
+      },
+      "CaseListItem": {
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "title": "Caseid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "patientId": {
+            "type": "string",
+            "title": "Patientid",
+            "default": ""
+          },
+          "eye": {
+            "type": "string",
+            "title": "Eye",
+            "default": ""
+          },
+          "phcId": {
+            "type": "string",
+            "title": "Phcid",
+            "default": ""
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "caseId",
+          "status"
+        ],
+        "title": "CaseListItem"
+      },
+      "CaseResponse": {
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "title": "Caseid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/QualityResult"
+          },
+          "aiPrediction": {
+            "$ref": "#/components/schemas/AiPrediction"
+          },
+          "explainability": {
+            "$ref": "#/components/schemas/Explainability"
+          },
+          "humanReview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HumanReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finalDecision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinalDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "caseId",
+          "status",
+          "quality",
+          "aiPrediction",
+          "explainability"
+        ],
+        "title": "CaseResponse"
+      },
+      "CaseStats": {
+        "properties": {
+          "totalCases": {
+            "type": "integer",
+            "title": "Totalcases",
+            "default": 0
+          },
+          "screeningsCompleted": {
+            "type": "integer",
+            "title": "Screeningscompleted",
+            "default": 0
+          },
+          "pendingReviews": {
+            "type": "integer",
+            "title": "Pendingreviews",
+            "default": 0
+          },
+          "recaptureRequired": {
+            "type": "integer",
+            "title": "Recapturerequired",
+            "default": 0
+          },
+          "reviewed": {
+            "type": "integer",
+            "title": "Reviewed",
+            "default": 0
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "CaseStats"
+      },
+      "CreateCaseResponse": {
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "title": "Caseid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "caseId"
+        ],
+        "title": "CreateCaseResponse"
+      },
+      "Explainability": {
+        "properties": {
+          "gradCamAvailable": {
+            "type": "boolean",
+            "title": "Gradcamavailable",
+            "default": false
+          },
+          "gradCamPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gradcampath"
+          },
+          "evidenceAvailable": {
+            "type": "boolean",
+            "title": "Evidenceavailable",
+            "default": false
+          },
+          "evidencePath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidencepath"
+          }
+        },
+        "type": "object",
+        "title": "Explainability"
+      },
+      "FinalDecision": {
+        "properties": {
+          "grade": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "gradeLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gradelabel"
+          },
+          "referral": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referral"
+          }
+        },
+        "type": "object",
+        "title": "FinalDecision"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "matlabEngine": {
+            "type": "boolean",
+            "title": "Matlabengine"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "database": {
+            "type": "string",
+            "title": "Database",
+            "default": "ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "matlabEngine",
+          "version"
+        ],
+        "title": "HealthResponse"
+      },
+      "HumanReview": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "reviewerId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewerid"
+          },
+          "overrideGrade": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overridegrade"
+          },
+          "finalReferral": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalreferral"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "title": "HumanReview"
+      },
+      "QualityResult": {
+        "properties": {
+          "class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "failureReasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failurereasons"
+          },
+          "recaptureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recapturereason"
+          },
+          "recaptureInstruction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recaptureinstruction"
+          }
+        },
+        "type": "object",
+        "title": "QualityResult"
+      },
+      "ReportResponse": {
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "title": "Caseid"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "disclaimer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disclaimer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "caseId"
+        ],
+        "title": "ReportResponse"
+      },
+      "ReviewAction": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "reviewerId": {
+            "type": "string",
+            "title": "Reviewerid"
+          },
+          "overrideGrade": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overridegrade"
+          },
+          "finalReferral": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalreferral"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "reviewerId"
+        ],
+        "title": "ReviewAction"
+      },
+      "ReviewResponse": {
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "title": "Caseid"
+          },
+          "review": {
+            "$ref": "#/components/schemas/HumanReview"
+          },
+          "finalDecision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FinalDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "caseId",
+          "review"
+        ],
+        "title": "ReviewResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
