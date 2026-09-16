@@ -97,6 +97,20 @@ def _clean_json_floats(obj: Any) -> Any:
     return obj
 
 
+def _clean_probabilities(raw: Any) -> list[float] | None:
+    """Clean raw model probabilities into a list[float] (or None).
+
+    Honest rule, mirroring the adapter's ``_vector``: if ANY probability is
+    non-finite, drop the whole vector. A partially-valid row would otherwise
+    leak None into a ``list[float]`` API field (pydantic rejects it) and is
+    not clinically usable.
+    """
+    items = _clean_json_floats(list(raw or []))
+    if not items or any(item is None for item in items):
+        return None
+    return items
+
+
 def run_screening(
     case_id: str,
     image_data: BinaryIO,
@@ -170,7 +184,7 @@ def run_screening(
         screening["aiPrediction"] = {
             "grade": grade,
             "gradeLabel": GRADE_LABELS.get(grade, "Unknown") if grade is not None else None,
-            "probabilities": _clean_json_floats(list(grading_data.get("rawProbs") or [])) or None,
+            "probabilities": _clean_probabilities(grading_data.get("rawProbs")),
             "referable": grading_data.get("referable"),
             "confidence": calibrated_data.get("confidence"),
             "uncertainty": calibrated_data.get("uncertainty"),

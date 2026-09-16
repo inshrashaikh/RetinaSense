@@ -38,7 +38,7 @@ const mutableCase: CaseResponse = {
   caseId: 'RS-REVIEW-1',
   status: 'completed',
   quality: { class: 'good', score: 0.9, failureReasons: [], recaptureReason: null, recaptureInstruction: null },
-  aiPrediction: { grade: 2, gradeLabel: 'Moderate NPDR', referable: true, confidence: 0.6, uncertainty: 0.3, reviewRequired: true },
+  aiPrediction: { grade: 2, gradeLabel: 'Moderate NPDR', probabilities: null, referable: true, confidence: 0.6, uncertainty: 0.3, reviewRequired: true },
   explainability: { gradCamAvailable: false, gradCamPath: null, evidenceAvailable: false, evidencePath: null },
   humanReview: null,
   finalDecision: null,
@@ -50,7 +50,7 @@ beforeEach(() => {
   mutableCase.humanReview = null;
   mutableCase.finalDecision = null;
   mutableCase.aiPrediction = {
-    grade: 2, gradeLabel: 'Moderate NPDR', referable: true,
+    grade: 2, gradeLabel: 'Moderate NPDR', probabilities: null, referable: true,
     confidence: 0.6, uncertainty: 0.3, reviewRequired: true,
   };
 

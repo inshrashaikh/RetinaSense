@@ -79,6 +79,7 @@ function buildCase(scenario: DemoScenario): CaseResponse {
       aiPrediction = {
         grade: 1,
         gradeLabel: 'Mild NPDR',
+        probabilities: null,
         referable: false,
         confidence: 0.61,
         uncertainty: 0.34,
@@ -96,6 +97,7 @@ function buildCase(scenario: DemoScenario): CaseResponse {
       aiPrediction = {
         grade: 2,
         gradeLabel: 'Moderate NPDR',
+        probabilities: null,
         referable: true,
         confidence: reviewRequired ? 0.58 : 0.81,
         uncertainty: reviewRequired ? 0.38 : 0.11,
