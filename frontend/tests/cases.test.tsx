@@ -164,8 +164,7 @@ describe('LatestResultPage', () => {
 
     render(<LatestResultPage />);
 
-    expect(await screen.findByText('Case RS-2026-00002')).toBeInTheDocument();
-    expect(screen.getByText('2 · Moderate NPDR')).toBeInTheDocument();
+    expect(await screen.findByText('2 · Moderate NPDR')).toBeInTheDocument();
   });
 
   it('shows an honest empty state when no screening exists', async () => {

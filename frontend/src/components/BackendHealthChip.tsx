@@ -8,24 +8,41 @@ import type { HealthResponse } from '../api/types';
 
 type State = 'loading' | 'ok' | 'unreachable';
 
+/** How often the bottom-left reachability indicator re-checks the backend. */
+const HEALTH_POLL_MS = 10_000;
+
 export function BackendHealthChip() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [state, setState] = useState<State>('loading');
 
   useEffect(() => {
     let alive = true;
-    fetchHealth()
-      .then((h) => {
-        if (alive) {
-          setHealth(h);
-          setState('ok');
+    let currentlyUnreachable = false;
+
+    async function check() {
+      try {
+        const h = await fetchHealth();
+        if (!alive) return;
+        currentlyUnreachable = false;
+        setHealth(h);
+        setState('ok');
+      } catch {
+        // After any failed poll the chip must reflect the live state — the
+        // New screening page and this indicator share the same API base URL,
+        // so an unreachable chip here means screening will fail too.
+        if (!alive) return;
+        if (!currentlyUnreachable) {
+          currentlyUnreachable = true;
+          setState('unreachable');
         }
-      })
-      .catch(() => {
-        if (alive) setState('unreachable');
-      });
+      }
+    }
+
+    void check();
+    const timer = setInterval(() => void check(), HEALTH_POLL_MS);
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, []);
 

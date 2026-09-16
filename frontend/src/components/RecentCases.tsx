@@ -8,7 +8,7 @@ import type { CaseListItem } from '../api/types';
 import { navigate } from '../router';
 import { StatusPill } from './StatusPill';
 import { statusTone, statusLabel } from '../utils/format';
-import { formatDate } from '../pages/CasesPage';
+import { formatDate } from '../utils/format';
 
 type ListState = 'loading' | 'done' | 'error';
 

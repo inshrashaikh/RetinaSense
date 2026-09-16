@@ -15,9 +15,11 @@ import type {
   CreateCaseRequest,
   CreateCaseResponse,
   HealthResponse,
+  LoginResponse,
   ReportResponse,
   ReviewRequest,
   ReviewResponse,
+  UserInfo,
 } from './types';
 
 /**
@@ -77,6 +79,15 @@ export async function fetchCaseImage(caseId: string): Promise<Blob> {
   });
 }
 
+/** Fetch a named explainability artifact (e.g. 'gradcam') for a case. */
+export async function fetchCaseArtifact(caseId: string, name: string): Promise<Blob> {
+  if (isDemoMode) return demo.fetchCaseArtifact(caseId, name);
+  return apiRequestBlob(
+    `/api/cases/${encodeURIComponent(caseId)}/artifacts/${encodeURIComponent(name)}`,
+    { timeoutMs: 30_000 },
+  );
+}
+
 export async function submitReview(
   caseId: string,
   review: ReviewRequest,
@@ -112,5 +123,37 @@ export async function generateReport(caseId: string): Promise<ReportResponse> {
   return apiRequest<ReportResponse>(`/api/cases/${encodeURIComponent(caseId)}/report`, {
     method: 'POST',
     timeoutMs: 15_000,
+  });
+}
+
+/**
+ * Authenticate against the backend and return the signed bearer token + user.
+ *
+ * DEMO mode has no login: sessions are implicit there, so the App never
+ * reaches this endpoint when VITE_DEMO_MODE is on.
+ */
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+    timeoutMs: 10_000,
+  });
+}
+
+/** Re-fetch the current user profile (used to validate a persisted session). */
+export async function fetchMe(): Promise<UserInfo> {
+  if (isDemoMode) return demo.fetchMe();
+  return apiRequest<UserInfo>('/api/auth/me', { timeoutMs: 10_000 });
+}
+
+/**
+ * Download the backend-built PDF for a report. The PDF is assembled on the
+ * server (reportlab / MATLAB reporting), never composed in the browser.
+ */
+export async function fetchReportPdf(caseId: string): Promise<Blob> {
+  if (isDemoMode) return demo.fetchReportPdf(caseId);
+  return apiRequestBlob(`/api/cases/${encodeURIComponent(caseId)}/report/pdf`, {
+    timeoutMs: 30_000,
   });
 }

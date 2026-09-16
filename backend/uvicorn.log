@@ -1,0 +1,162 @@
+INFO:     127.0.0.1:60704 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53480 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53480 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55282 - "GET /api/cases/RS-2026-00020 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53480 - "GET /api/cases/RS-2026-00020 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55282 - "GET /api/cases/RS-2026-00020/image HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64474 - "GET /api/cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53809 - "GET /api/cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60253 - "GET /api/cases/RS-2026-00021 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60253 - "GET /api/cases/RS-2026-00021 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64474 - "POST /api/cases/RS-2026-00021/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60253 - "POST /api/cases/RS-2026-00021/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60253 - "GET /api/cases/RS-2026-00021/image HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64474 - "GET /api/cases/RS-2026-00021/artifacts/gradcam HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52687 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52687 - "POST /api/cases HTTP/1.1" 201 Created
+INFO:     127.0.0.1:52687 - "POST /api/cases/RS-2026-00022/screen HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:49871 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49871 - "POST /api/cases HTTP/1.1" 201 Created
+INFO:     127.0.0.1:49871 - "POST /api/cases/RS-2026-00023/image HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:49892 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49892 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 14:24:24 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:49892 - "POST /api/cases/RS-2026-00024/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49892 - "POST /api/cases/RS-2026-00024/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57425 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57425 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 14:35:38 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:57425 - "POST /api/cases/RS-2026-00025/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57425 - "POST /api/cases/RS-2026-00025/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:01:58 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00026/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:02:12 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00027/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:02:26 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00028/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:02:41 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00029/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:02:54 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00030/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:03:08 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00031/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:03:21 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00032/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:03:35 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00033/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:03:49 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00034/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:04:02 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00035/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:04:17 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00036/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:04:30 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00037/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:04:43 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00038/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:04:57 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00039/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56076 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:05:10 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:56076 - "POST /api/cases/RS-2026-00040/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:12:23 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00041/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:12:35 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00042/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:12:48 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00043/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:13:02 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00044/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:13:16 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00045/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:13:29 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00046/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:13:44 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00047/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:13:58 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00048/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:14:10 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00049/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:14:24 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00050/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:14:37 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00051/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:14:51 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00052/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:15:06 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00053/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:15:20 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00054/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:15:34 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00055/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:15:47 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00056/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:15:59 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00057/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:16:13 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00058/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:16:25 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00059/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:16:37 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00060/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:16:49 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00061/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:17:02 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00062/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:17:15 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00063/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:17:28 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00064/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:17:42 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00065/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:17:55 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00066/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:18:07 [INFO] [PIPELINE] Image ungradable -> recapture (REFOCUS)
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00067/screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59809 - "POST /api/cases HTTP/1.1" 201 Created
+2026-09-15 15:18:21 [INFO] [PIPELINE] Enhanced image still ungradable -> recapture
+INFO:     127.0.0.1:59809 - "POST /api/cases/RS-2026-00068/screen HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:51124 - "GET /api/health HTTP/1.1" 200 OK

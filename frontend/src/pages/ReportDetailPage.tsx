@@ -8,9 +8,10 @@
  * says so and offers a retry.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { generateReport, getCase } from '../api/endpoints';
+import { fetchReportPdf, generateReport, getCase } from '../api/endpoints';
 import type { CaseResponse, ReportResponse } from '../api/types';
 import { hasPrediction } from '../api/types';
+import { downloadBlob } from '../utils/download';
 import { AiPredictionPanel } from '../components/AiPredictionPanel';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ExplainabilityPanel } from '../components/ExplainabilityPanel';
@@ -48,6 +49,20 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
   const [caseData, setCaseData] = useState<CaseResponse | null>(null);
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
+  const [pdfState, setPdfState] = useState<'idle' | 'loading' | 'error'>('idle');
+
+  async function downloadPdf() {
+    setPdfState('loading');
+    try {
+      const blob = await fetchReportPdf(caseId);
+      downloadBlob(blob, `RetinaSense-report-${caseId}.pdf`);
+      setPdfState('idle');
+    } catch (err) {
+      const f = friendlyError(err);
+      setError(f);
+      setPdfState('error');
+    }
+  }
 
   const load = useCallback(async () => {
     setState('loading');
@@ -131,6 +146,16 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
         badges={<StatusPill tone={statusTone(effectiveStatus)} label={statusLabel(effectiveStatus)} />}
         actions={
           <>
+            {report && (
+              <Button
+                variant="primary"
+                icon="download"
+                loading={pdfState === 'loading'}
+                onClick={() => void downloadPdf()}
+              >
+                {pdfState === 'loading' ? 'Preparing PDF…' : 'Download PDF'}
+              </Button>
+            )}
             <Button icon="print" onClick={() => window.print()}>
               Print
             </Button>
@@ -188,7 +213,7 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
         </div>
         <div className="page-stack">
           <AiPredictionPanel ai={ai} />
-          <ExplainabilityPanel explain={explain} />
+          <ExplainabilityPanel caseId={caseId} explain={explain} />
         </div>
       </div>
 

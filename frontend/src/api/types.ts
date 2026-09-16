@@ -22,6 +22,7 @@ export interface QualityResult {
 export interface AiPrediction {
   grade: number | null;
   gradeLabel: string | null;
+  probabilities: number[] | null;
   referable: boolean | null;
   confidence: number | null;
   uncertainty: number | null;
@@ -82,6 +83,26 @@ export interface CreateCaseRequest {
   patientId?: string;
   eye?: string;
   phcId?: string;
+}
+
+/** Roles mirror backend/app/auth_deps.py (phc_operator | ophthalmologist | admin). */
+export type Role = 'phc_operator' | 'ophthalmologist' | 'admin';
+
+export interface UserInfo {
+  id: number;
+  username: string;
+  name: string;
+  role: Role;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  user: UserInfo;
+  token: string;
 }
 
 export interface CreateCaseResponse {

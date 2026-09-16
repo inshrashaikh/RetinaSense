@@ -15,6 +15,15 @@ function q = quality_thresholds()
 
     q = struct();
 
+    % Focus normalization divisor for assessQuality.m's Laplacian-variance
+    % sharpness metric: focus = min(1, var(lap)/focusNormalizeVar).
+    % Calibrated on real fundus data (APTOS 2019 + IDRiD resized to 1024px
+    % working size): the data-driven value 0.005 maps an average-sharpness
+    % fundus image to focus ~0.7 (vs the previous ad-hoc 0.02 which mapped
+    % nearly every real image below the 0.25 ungradable threshold). The move
+    % to config honours 'no hard-coded thresholds' — see TODO(Sprint 1).
+    q.focusNormalizeVar = 0.005;
+
     % Any metric below 'ungradable' threshold => image is ungradable.
     q.metricLow  = [ ...   % rows: [metric key, ungradable threshold]
         {'focus',          0.25}; ...

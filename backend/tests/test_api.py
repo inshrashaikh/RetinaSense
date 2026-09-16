@@ -38,6 +38,21 @@ from app.utils.case_id import next_case_id
 client = TestClient(app, raise_server_exceptions=False)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _authenticated_client():
+    """Attach a bearer token to the module-level client.
+
+    The seed accounts are created by the session-scoped ``_temp_data_dir``
+    fixture (see conftest.py); every case/screening/review/report endpoint
+    requires an authenticated user, so the whole module logs in once.
+    """
+    resp = client.post("/api/auth/login", json={"username": "doctor", "password": "doctor123"})
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["token"]
+    client.headers.update({"Authorization": f"Bearer {token}"})
+    yield
+
+
 # ─── helpers ───────────────────────────────────────────────────────────────
 
 def _create_case() -> str:
@@ -68,7 +83,9 @@ def test_health():
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["matlabEngine"] is False
+    # Host-dependent: True when matlab.engine is installed (R2026a dev box),
+    # False on CI hosts without the engine package.
+    assert body["matlabEngine"] is cfg.MATLAB_ENGINE_AVAILABLE
     assert "version" in body
 
 
@@ -140,9 +157,16 @@ def test_oversized_file():
 
 # ─── 7. MATLAB unavailable state ─────────────────────────────────────────
 
-def test_matlab_unavailable():
+def test_matlab_unavailable(monkeypatch):
     from app.services.matlab_adapter import MatlabAdapter
     from app.utils.errors import RetinaSenseError, ErrorCode
+
+    # Force the "MATLAB not available" state regardless of the host, so the
+    # test is deterministic on CI machines without the engine AND on the R2026a
+    # dev box where the engine is importable.
+    import app.services.matlab_adapter as matlab_adapter
+
+    monkeypatch.setattr(matlab_adapter, "MATLAB_ENGINE_AVAILABLE", False)
 
     adapter = MatlabAdapter()
     with pytest.raises(RetinaSenseError) as exc_info:
@@ -152,9 +176,12 @@ def test_matlab_unavailable():
 
 # ─── 7b. Screen route -> structured 503 when MATLAB is not available ─────
 
-def test_screen_route_pipeline_unavailable():
+def test_screen_route_pipeline_unavailable(monkeypatch):
     """The default (real) adapter must FAIL the screening with a structured
     503 — never fabricate a grade when MATLAB is missing."""
+    import app.services.matlab_adapter as matlab_adapter
+
+    monkeypatch.setattr(matlab_adapter, "MATLAB_ENGINE_AVAILABLE", False)
     case_id = _create_case()
     resp = client.post(
         f"/api/cases/{case_id}/screen",
@@ -249,6 +276,9 @@ def test_human_approve():
     body = resp.json()
     assert body["review"]["action"] == "approve"
     assert body["review"]["status"] == "approved"
+    # The authenticated user signs the review with their DISPLAY name, not the
+    # (discarded) body.reviewerId.
+    assert body["review"]["reviewerId"] == "Dr. Meera Rao"
     assert body["finalDecision"]["referral"] is False
 
 
@@ -491,8 +521,11 @@ def test_case_stats_after_creation_and_screening():
 
 
 # ─── 20. CORS headers ────────────────────────────────────────────────────
+# The API authenticates with bearer tokens (never cookies), so CORS defaults
+# to allow ANY origin (`config.CORS_ORIGINS == ["*"]`); an explicit
+# `RETINASENSE_CORS_ORIGINS` env can still pin the allow-list.
 
-def test_cors_allows_vite_origin():
+def test_cors_allows_any_origin_by_default():
     resp = client.options(
         "/api/health",
         headers={
@@ -501,7 +534,19 @@ def test_cors_allows_vite_origin():
         },
     )
     assert resp.status_code == 200
-    assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert resp.headers.get("access-control-allow-origin") == "*"
+
+
+def test_cors_allows_arbitrary_origin_by_default():
+    resp = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://192.168.137.1:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "*"
 
 
 # ─── 21. Report generation ────────────────────────────────────────────────
@@ -583,3 +628,135 @@ def test_list_cases_effective_status():
     items = resp.json()
     entry = next(item for item in items if item["caseId"] == case_id)
     assert entry["status"] == "reviewed"
+
+
+# ─── 25. Non-finite adapter output never crashes the endpoint ─────────────
+# Regression: a real MATLAB engine can return NaN (e.g. confidence) for some
+# images. Starlette's JSONResponse refuses to serialise NaN and returned a 500
+# ("Out of range float values are not JSON compliant"), which the frontend
+# surfaced as a generic "backend unreachable". NaN must become an honest null.
+
+def test_screen_endpoint_handles_nan_adapter_output(monkeypatch):
+    from app.services.matlab_adapter import BaseMatlabAdapter
+
+    class NaNAdapter(BaseMatlabAdapter):
+        def run_pipeline(self, image_path, metadata):
+            return {
+                "quality": {
+                    "class": "good",
+                    "score": float("nan"),
+                    "failureReasons": [],
+                    "recaptureReason": None,
+                    "recaptureInstruction": None,
+                },
+                "grading": {
+                    "rawProbs": [1.0, 0.0, 0.0, 0.0, float("nan")],
+                    "grade": 1,
+                    "referableProb": float("nan"),
+                    "referable": False,
+                },
+                "calibrated": {
+                    "calibratedProbs": [1.0, 0.0, 0.0, 0.0, float("nan")],
+                    "confidence": float("nan"),
+                    "uncertainty": float("nan"),
+                    "reviewRequired": False,
+                },
+                "explain": None,
+                "review": None,
+            }
+
+    monkeypatch.setattr(
+        "app.services.matlab_adapter.default_adapter", lambda: NaNAdapter()
+    )
+
+    case_id = _create_case()
+    resp = client.post(
+        f"/api/cases/{case_id}/screen",
+        files={"image": ("nan.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["aiPrediction"]["confidence"] is None
+    assert body["aiPrediction"]["uncertainty"] is None
+    assert body["quality"]["score"] is None
+
+
+def test_matlab_adapter_rejects_non_finite_numbers():
+    from app.services.matlab_adapter import _scalar, _vector
+
+    assert _scalar(float("nan")) is None
+    assert _scalar(float("inf")) is None
+    assert _scalar(float("-inf")) is None
+    assert _scalar(0.58) == 0.58
+    assert _scalar(None) is None
+    assert _vector([0.5, float("nan")], 2) is None
+    assert _vector([0.5, 0.5], 2) == [0.5, 0.5]
+
+
+# ─── 27. Reviewer-name migration ─────────────────────────────────────────
+# Legacy review rows stamped reviewer_id with the USERNAME ("doctor"); the
+# migration rewrites them to the display name ("Dr. Meera Rao").
+
+def test_backfill_reviewer_names_migrates_legacy_rows():
+    from app.services import auth as auth_svc
+
+    case_id = _create_case()
+    # Simulate a legacy review recorded BEFORE the fix (username, not name).
+    database_store.save_review(
+        case_id,
+        {
+            "review": {
+                "action": "approve",
+                "reviewerId": "doctor",
+                "status": "approved",
+            },
+            "finalDecision": {"grade": 0, "gradeLabel": "No DR", "referral": False},
+            "aiGradeImmutable": True,
+        },
+    )
+
+    updated = database_store.backfill_reviewer_names(auth_svc.username_to_name())
+    assert updated >= 1
+    review = database_store.load_review(case_id)
+    assert review["review"]["reviewerId"] == "Dr. Meera Rao"
+    # Idempotent: a second run changes nothing.
+    assert database_store.backfill_reviewer_names(auth_svc.username_to_name()) == 0
+
+
+# ─── 26. Explainability artifact content guards ──────────────────────────
+# Regression: a degenerate (all-zero) Grad-CAM was blended into a flat navy
+# wash and still served as available because the content check ran on the
+# blended overlay instead of the raw heatmap.
+
+def test_has_attention_content_rejects_degenerate_overlays():
+    import numpy as np
+
+    from app.services.artifacts import has_attention_content
+
+    # All-zero honest fallback.
+    assert not has_attention_content(np.zeros((100, 100, 3), dtype=np.uint8))
+    # Uniform navy wash (jet(0) over a flat base) — a degenerate empty cam.
+    assert not has_attention_content(np.full((100, 100, 3), 34, dtype=np.uint8))
+    # Real overlay: varies across the fundus.
+    real = np.zeros((100, 100, 3), dtype=np.uint8)
+    real[:, :, 0] = np.arange(100, dtype=np.uint8).reshape(-1, 1) * 2
+    assert has_attention_content(real)
+    # Empty / None inputs.
+    assert not has_attention_content(None)
+    assert not has_attention_content(np.zeros((0, 0, 3), dtype=np.uint8))
+
+
+def test_compute_explain_rejects_degenerate_cam():
+    import numpy as np
+
+    from app.services.explainability import _has_attention_content
+
+    # All-zero Grad-CAM (model found nothing to attend to).
+    assert not _has_attention_content(np.zeros((224, 224)))
+    # Effectively empty (all values non-positive).
+    assert not _has_attention_content(np.full((224, 224), -0.5))
+    # A real map with a highlight is kept.
+    cam = np.zeros((224, 224))
+    cam[60:120, 90:140] = 0.9
+    assert _has_attention_content(cam)
+    assert not _has_attention_content(None)

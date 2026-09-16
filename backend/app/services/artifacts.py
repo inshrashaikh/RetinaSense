@@ -70,11 +70,27 @@ def _pixel_count(arr: Any) -> int:
 def has_attention_content(arr: Any) -> bool:
     """True when a Grad-CAM overlay carries real (non-zero) attention content.
 
-    computeGradCAM leaves the attention image all-zero when no Grad-CAM was
-    produced (honest fallback) — an all-zero image is 'unavailable', never a
-    blank placeholder to display.
+    The honest fallbacks — an all-zero attention image and a uniform flat wash
+    (e.g. a degenerate navy-blue blend from an empty heatmap) — both carry no
+    discernible attention and are treated as 'unavailable', never displayed.
     """
-    return _pixel_count(arr) > 0 and bool((arr != 0).any())
+    if _pixel_count(arr) <= 0:
+        return False
+    try:
+        a = np.asarray(arr, dtype=np.float64)
+    except Exception:
+        return False
+    if a.size == 0:
+        return False
+    if not bool((a != 0).any()):
+        return False
+    # Uniform image (every pixel identical): flat colour dump — no attention.
+    v0 = a.ravel()[0]
+    if not bool((a != v0).any()):
+        return False
+    # The overlay always includes the fundus base, so real overlays have wide
+    # pixel variation; require a little more than numerical noise.
+    return float(np.abs(a - v0).max()) > 1.0
 
 
 def has_visible_markers(rgb: Any) -> bool:

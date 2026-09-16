@@ -36,6 +36,7 @@ class QualityResult(BaseModel):
 class AiPrediction(BaseModel):
     grade: int | None = None
     gradeLabel: str | None = None
+    probabilities: list[float] | None = None
     referable: bool | None = None
     confidence: float | None = None
     uncertainty: float | None = None
@@ -144,3 +145,22 @@ class HealthResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: dict[str, str]
+
+
+# ---------- Auth ----------
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    name: str
+    role: str
+
+
+class LoginResponse(BaseModel):
+    user: UserInfo
+    token: str

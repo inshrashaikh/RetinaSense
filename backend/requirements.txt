@@ -5,3 +5,18 @@ python-multipart==0.0.20
 pytest==8.4.1
 httpx==0.28.1
 sqlalchemy==2.0.52
+matplotlib==3.11.2
+reportlab==5.0.1
+numpy==2.3.5
+pillow==12.3.0
+opencv-python==5.0.0
+
+# Deep learning — used by the real PyTorch Grad-CAM explainability path
+# (app/services/explainability.py ⇒ data/models/resnet50_dr_aptos.pt).
+# On a host without a GPU install the CPU wheels instead:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0
+torchvision==0.28.0
+
+# MATLAB Engine for Python (real screening adapter). Optional offline host:
+# pip install matlabengine  (only available on machines with MATLAB)

@@ -4,8 +4,9 @@
  */
 import { useState } from 'react';
 import type { ReportResponse } from '../api/types';
-import { generateReport } from '../api/endpoints';
+import { fetchReportPdf, generateReport } from '../api/endpoints';
 import { friendlyError } from '../utils/errors';
+import { downloadBlob } from '../utils/download';
 import { Alert } from './ui/Alert';
 import { Button } from './ui/Button';
 import { Card, CardBody, CardHeader } from './ui/Card';
@@ -15,6 +16,7 @@ export function ReportSection({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
+  const [pdfState, setPdfState] = useState<'idle' | 'loading' | 'error'>('idle');
 
   async function load() {
     setState('loading');
@@ -27,6 +29,19 @@ export function ReportSection({ caseId }: { caseId: string }) {
       const f = friendlyError(err);
       setError(f);
       setState('error');
+    }
+  }
+
+  async function downloadPdf() {
+    setPdfState('loading');
+    try {
+      const blob = await fetchReportPdf(caseId);
+      downloadBlob(blob, `RetinaSense-report-${caseId}.pdf`);
+      setPdfState('idle');
+    } catch (err) {
+      const f = friendlyError(err);
+      setError(f);
+      setPdfState('error');
     }
   }
 
@@ -66,7 +81,18 @@ export function ReportSection({ caseId }: { caseId: string }) {
               <Button icon="refresh" onClick={() => void load()}>
                 Regenerate report
               </Button>
+              <Button
+                variant="primary"
+                icon="download"
+                loading={pdfState === 'loading'}
+                onClick={() => void downloadPdf()}
+              >
+                {pdfState === 'loading' ? 'Preparing PDF…' : 'Download PDF'}
+              </Button>
             </div>
+            {pdfState === 'error' && error && (
+              <Alert variant="error" title={error.title}>{error.detail}</Alert>
+            )}
           </>
         )}
 

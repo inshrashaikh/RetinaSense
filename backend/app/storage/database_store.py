@@ -90,6 +90,32 @@ def load_screening(case_id: str) -> dict[str, Any] | None:
         }
 
 
+def backfill_reviewer_names(name_by_username: dict[str, str]) -> int:
+    """Migrate legacy review rows whose reviewer is stored as a USERNAME.
+
+    Earlier builds stamped reviews with ``reviewer_id = username`` (e.g.
+    "doctor"); reviews must carry the display name ("Dr. Meera Rao"). This is
+    idempotent: only rows whose current value matches a known username (but
+    not already a name) are rewritten, in both the column and the JSON payload.
+    Returns the number of rows updated.
+    """
+    updated = 0
+    with session_scope() as s:
+        rows = s.query(HumanReviewRecord).all()
+        for row in rows:
+            cur = row.reviewer_id or ""
+            name = name_by_username.get(cur)
+            if not name or name == cur:
+                continue
+            row.reviewer_id = name
+            payload = dict(row.payload or {})
+            if payload.get("reviewerId") == cur:
+                payload["reviewerId"] = name
+                row.payload = payload
+            updated += 1
+    return updated
+
+
 def save_review(case_id: str, data: dict[str, Any]) -> None:
     """Persist a human review AND the final decision — never the AI row."""
     review_entry = data.get("review") or {}
@@ -280,18 +306,22 @@ def list_cases() -> list[dict[str, Any]]:
 
 
 def case_stats() -> dict[str, Any]:
-    """Aggregate counts used by the dashboard stat cards."""
+    """Aggregate counts used by the dashboard stat cards.
+
+    Effective statuses come from list_cases: 'created' (no screening yet),
+    'completed' (screening done, awaiting human review), 'reviewed' (human
+    review recorded), 'recapture_required'.
+    """
     cases = list_cases()
     total = len(cases)
+    created = sum(1 for c in cases if c["status"] == "created")
     completed = sum(1 for c in cases if c["status"] == "completed")
-    pending = sum(1 for c in cases if c["status"] == "completed")
     recapture = sum(1 for c in cases if c["status"] == "recapture_required")
     reviewed = sum(1 for c in cases if c["status"] == "reviewed")
-    created = sum(1 for c in cases if c["status"] == "created")
     return {
         "totalCases": total,
-        "screeningsCompleted": completed,
-        "pendingReviews": pending,
+        "screeningsCompleted": completed + reviewed,
+        "pendingReviews": completed,
         "recaptureRequired": recapture,
         "reviewed": reviewed,
         "created": created,

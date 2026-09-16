@@ -109,3 +109,16 @@ class ReportRecord(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     disclaimer: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False, default=_now)
+
+
+class UserRecord(Base):
+    """Application user with a role-aware account (prototype auth)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, default="")
+    role: Mapped[str] = mapped_column(String, nullable=False, default="phc_operator")
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False, default=_now)

@@ -24,9 +24,10 @@ function quality = assessQuality(working, params)
     gray = rgb2gray(im2double(working));
 
     % ---- Metric 1: focus (variance of Laplacian, green channel) ----
-    % Higher laplacian variance => sharper. Normalized to 0..1 heuristically.
+    % Higher laplacian variance => sharper. Normalized to 0..1 by the
+    % data-calibrated divisor (config/quality_thresholds.m focusNormalizeVar).
     lap = conv2(gray, [0 1 0; 1 -4 1; 0 1 0], 'same');
-    focus = min(1, var(lap(:)) / 0.02);
+    focus = min(1, var(lap(:)) / params.focusNormalizeVar);
 
     % ---- Metric 2: illumination (luminance mean + saturation guard) ----
     lumMean = mean(gray(:));

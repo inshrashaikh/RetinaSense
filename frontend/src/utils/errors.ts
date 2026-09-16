@@ -70,6 +70,9 @@ const CODE_MESSAGES: Record<string, FriendlyError> = {
 
 export function friendlyError(e: unknown): FriendlyError {
   if (isApiError(e)) {
+    if (e.code === 'NETWORK_ERROR') {
+      return { title: 'Backend unreachable', detail: e.message };
+    }
     return (
       CODE_MESSAGES[e.code] ?? {
         title: 'Request failed',

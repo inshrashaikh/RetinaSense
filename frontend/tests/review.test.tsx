@@ -96,14 +96,14 @@ describe('Human override workflow', () => {
     const gradeSelect = screen.getByLabelText('Override DR grade');
     await user.selectOptions(gradeSelect, '3');
 
-    await user.type(screen.getByLabelText('Reviewer (ophthalmologist) ID'), 'OPH-3');
+    await user.type(screen.getByLabelText(/Reviewer/), 'Dr. Meera Rao');
     await user.type(screen.getByLabelText('Notes'), 'Confirmed clinically; upgrading.');
 
     await user.click(submit);
 
     expect(api.submitReview).toHaveBeenCalledWith('RS-REVIEW-1', {
       action: 'override',
-      reviewerId: 'OPH-3',
+      reviewerId: 'Dr. Meera Rao',
       overrideGrade: 3,
       notes: 'Confirmed clinically; upgrading.',
     });
@@ -124,7 +124,7 @@ describe('Human override workflow', () => {
     await user.click(screen.getByLabelText('Override grade'));
     const gradeSelect = screen.getByLabelText('Override DR grade');
     await user.selectOptions(gradeSelect, '3');
-    await user.type(screen.getByLabelText('Reviewer (ophthalmologist) ID'), 'OPH-3');
+    await user.type(screen.getByLabelText(/Reviewer/), 'Dr. Meera Rao');
     await user.click(screen.getByRole('button', { name: 'Submit review' }));
 
     // Final decision is the override…

@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse
 
+from ..auth_deps import CurrentUser, require_roles
+from ..db.models import UserRecord
 from ..models.schemas import (
     CaseListItem,
     CaseMeta,
@@ -21,21 +23,31 @@ from ..services import report as report_svc
 
 router = APIRouter()
 
+# Roles allowed to run screenings / upload images.
+_SCREEN_ROLES = ("phc_operator", "ophthalmologist", "admin")
+# Roles allowed to make a final human decision (human-in-the-loop).
+_REVIEW_ROLES = ("ophthalmologist", "admin")
+
 
 # ---------- GET /api/cases ----------
 @router.get("/api/cases", response_model=list[CaseListItem])
-def list_cases() -> list[CaseListItem]:
+def list_cases(_user: CurrentUser) -> list[CaseListItem]:
     return [CaseListItem(**item) for item in screening_svc.list_cases()]
 
 
 # ---------- GET /api/cases/stats ----------
 @router.get("/api/cases/stats", response_model=CaseStats)
-def get_stats() -> CaseStats:
+def get_stats(_user: CurrentUser) -> CaseStats:
     return CaseStats(**screening_svc.case_stats())
 
 
 # ---------- POST /api/cases ----------
-@router.post("/api/cases", response_model=CreateCaseResponse, status_code=201)
+@router.post(
+    "/api/cases",
+    response_model=CreateCaseResponse,
+    status_code=201,
+    dependencies=[Depends(require_roles(*_SCREEN_ROLES))],
+)
 def create_case(
     patientId: str = Form(""),
     eye: str = Form(""),
@@ -51,6 +63,7 @@ def create_case(
     "/api/cases/{caseId}/screen",
     response_model=CaseResponse,
     status_code=200,
+    dependencies=[Depends(require_roles(*_SCREEN_ROLES))],
 )
 async def screen_case(
     caseId: str,
@@ -103,7 +116,7 @@ async def screen_case(
 
 # ---------- GET /api/cases/{caseId} ----------
 @router.get("/api/cases/{caseId}", response_model=CaseResponse)
-def get_case(caseId: str) -> CaseResponse:
+def get_case(caseId: str, _user: CurrentUser) -> CaseResponse:
     data = screening_svc.get_case(caseId)
     if data is None:
         from ..utils.errors import RetinaSenseError, ErrorCode
@@ -144,12 +157,18 @@ def get_case(caseId: str) -> CaseResponse:
 
 
 # ---------- POST /api/cases/{caseId}/review ----------
-@router.post("/api/cases/{caseId}/review", response_model=ReviewResponse)
-def review_case(caseId: str, body: ReviewAction) -> ReviewResponse:
+# Reviewer identity comes from the authenticated user, not the client body —
+# the ophthalmologist (or admin) always signs their own decision.
+@router.post(
+    "/api/cases/{caseId}/review",
+    response_model=ReviewResponse,
+    dependencies=[Depends(require_roles(*_REVIEW_ROLES))],
+)
+def review_case(caseId: str, body: ReviewAction, user: UserRecord = Depends(require_roles(*_REVIEW_ROLES))) -> ReviewResponse:
     result = screening_svc.submit_review(
         caseId,
         action=body.action,
-        reviewer_id=body.reviewerId,
+        reviewer_id=user.name,
         override_grade=body.overrideGrade,
         final_referral=body.finalReferral,
         notes=body.notes,
@@ -172,20 +191,42 @@ def review_case(caseId: str, body: ReviewAction) -> ReviewResponse:
 
 # ---------- GET /api/cases/{caseId}/report ----------
 @router.get("/api/cases/{caseId}/report", response_model=ReportResponse)
-def get_report(caseId: str) -> ReportResponse:
+def get_report(caseId: str, _user: CurrentUser) -> ReportResponse:
     result = report_svc.get_report(caseId)
     return ReportResponse(**result)
 
 
 # ---------- POST /api/cases/{caseId}/report ----------
 @router.post("/api/cases/{caseId}/report", response_model=ReportResponse)
-def generate_report(caseId: str) -> ReportResponse:
+def generate_report(caseId: str, _user: CurrentUser) -> ReportResponse:
     result = report_svc.generate_report(caseId)
     return ReportResponse(**result)
 
 
 # ---------- GET /api/cases/{caseId}/image ----------
 @router.get("/api/cases/{caseId}/image")
-def get_case_image(caseId: str) -> FileResponse:
+def get_case_image(caseId: str, _user: CurrentUser) -> FileResponse:
     path = screening_svc.get_case_image(caseId)
     return FileResponse(path)
+
+
+# ---------- GET /api/cases/{caseId}/artifacts/{name} ----------
+@router.get("/api/cases/{caseId}/artifacts/{name}")
+def get_case_artifact(caseId: str, name: str, _user: CurrentUser) -> FileResponse:
+    from ..services.artifacts import resolve_artifact_path
+
+    path = resolve_artifact_path(caseId, name)
+    return FileResponse(path)
+
+
+# ---------- GET /api/cases/{caseId}/report/pdf ----------
+@router.get("/api/cases/{caseId}/report/pdf")
+def get_report_pdf(caseId: str, _user: CurrentUser) -> FileResponse:
+    from ..services.pdf_report import build_report_pdf
+
+    path = build_report_pdf(caseId)
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=path.name,
+    )

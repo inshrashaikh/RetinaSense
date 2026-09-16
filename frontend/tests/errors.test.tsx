@@ -64,7 +64,13 @@ describe('API error states', () => {
 
   it('shows a network error banner when the backend is unreachable during screening', async () => {
     api.createCase.mockImplementation(() => {
-      throw { kind: 'network', code: 'NETWORK_ERROR', message: 'Cannot reach the RetinaSense backend.' };
+      throw {
+        kind: 'network',
+        code: 'NETWORK_ERROR',
+        message:
+          'Cannot reach the RetinaSense backend (fetch failed (connection refused)). ' +
+          'Please check that it is running and the API base URL is correct.',
+      };
     });
     const user = userEvent.setup();
 
@@ -75,6 +81,7 @@ describe('API error states', () => {
 
     expect(await screen.findByText('Backend unreachable')).toBeInTheDocument();
     expect(screen.getByText(/please check that it is running/i)).toBeInTheDocument();
+    expect(screen.getByText(/connection refused/i)).toBeInTheDocument();
   });
 
   it('shows "Case not found" and a back action for an unknown case', async () => {

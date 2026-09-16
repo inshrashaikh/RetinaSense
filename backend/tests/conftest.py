@@ -39,6 +39,12 @@ def _temp_data_dir(tmp_path_factory):
     configure_database(db_path)
     init_db()
 
+    # Seed the demo accounts so authenticated API tests can log in
+    # (in production this happens in app.main.lifespan).
+    from app.services import auth as auth_svc
+
+    auth_svc.seed_users()
+
     yield tmp
     shutil.rmtree(tmp, ignore_errors=True)
 

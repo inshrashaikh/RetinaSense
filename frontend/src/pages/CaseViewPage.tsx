@@ -31,6 +31,7 @@ import { LoadingBlock } from '../components/ui/Skeleton';
 import { friendlyError } from '../utils/errors';
 import { statusLabel, statusTone } from '../utils/format';
 import { navigate } from '../router';
+import { getUser } from '../auth/session';
 
 type FetchState = 'loading' | 'done' | 'error';
 
@@ -96,6 +97,9 @@ export function CaseViewPage({ caseId }: { caseId: string }) {
   const review: HumanReview | null = data.humanReview;
   const recapture = data.status === 'recapture_required' || data.quality.class === 'ungradable';
   const aiReady = hasPrediction(ai);
+  // Review is clinical work: hidden for capture-only operators. With no session
+  // (demo mode) the form stays available — the backend enforces the role.
+  const canDoReview = getUser()?.role !== 'phc_operator';
   // A report can only exist once the pipeline has actually screened the image;
   // offering "load report" for a created/never-screened case would be misleading.
   const screened = data.status !== 'created';
@@ -199,7 +203,7 @@ export function CaseViewPage({ caseId }: { caseId: string }) {
 
         <div className="page-stack">
           <AiPredictionPanel ai={recapture ? null : data.aiPrediction} />
-          <ExplainabilityPanel explain={data.explainability} />
+          <ExplainabilityPanel caseId={caseId} explain={data.explainability} />
         </div>
       </div>
 
@@ -209,7 +213,7 @@ export function CaseViewPage({ caseId }: { caseId: string }) {
         review={review}
       />
 
-      {!recapture && !review && aiReady && (
+      {!recapture && !review && aiReady && canDoReview && (
         <ReviewPanel
           caseId={caseId}
           ai={ai}

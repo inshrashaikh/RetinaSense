@@ -34,6 +34,18 @@ vi.mock('../src/api/endpoints', () => ({
   generateReport: api.generateReport,
 }));
 
+// Authenticated session for every App-rendering test: the auth gate (App.tsx)
+// only shows the console once a signed-in user exists.
+vi.mock('../src/auth/session', () => ({
+  getToken: () => 'test-token',
+  getUser: () => ({ id: 1, username: 'doctor', name: 'Dr. Test', role: 'ophthalmologist' }),
+  isAuthenticated: () => true,
+  canReview: (role?: string) => role === 'ophthalmologist' || role === 'admin',
+  saveSession: vi.fn(),
+  clearSession: vi.fn(),
+  subscribeAuth: () => () => {},
+}));
+
 import App from '../src/App';
 import { AppShell } from '../src/components/AppShell';
 import { getHashPath, getSectionAnchor } from '../src/router';

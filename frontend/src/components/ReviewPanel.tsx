@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import type { AiPrediction, ReviewResponse } from '../api/types';
 import { submitReview } from '../api/endpoints';
+import { getUser } from '../auth/session';
 import { friendlyError } from '../utils/errors';
 import { Button } from './ui/Button';
 import { Card, CardBody, CardHeader } from './ui/Card';
@@ -31,9 +32,13 @@ const ACTIONS: { value: Action; label: string; hint: string }[] = [
 ];
 
 export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
+  const user = getUser();
   const [action, setAction] = useState<Action>('approve');
   const [overrideGrade, setOverrideGrade] = useState<number>(2);
-  const [reviewerId, setReviewerId] = useState('');
+  // Pre-filled with the signed-in reviewer's display name (e.g. "Dr. Meera
+  // Rao") — the backend signs the review with the authenticated user anyway.
+  // Fall back to the username only if a stale session has no name yet.
+  const [reviewerId, setReviewerId] = useState(user?.name || user?.username || '');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [reviewerError, setReviewerError] = useState('');
@@ -137,14 +142,15 @@ export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
           )}
 
           <Field
-            label="Reviewer (ophthalmologist) ID"
+            label="Reviewer"
             error={reviewerError || undefined}
+            hint="Signed-in reviewer name; recorded with the review."
           >
             <Input
               type="text"
               value={reviewerId}
               onChange={(e) => setReviewerId(e.target.value)}
-              placeholder="e.g. OPH-2"
+              placeholder="Reviewer name"
               autoComplete="off"
             />
           </Field>

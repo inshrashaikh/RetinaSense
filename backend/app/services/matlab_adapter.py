@@ -23,6 +23,8 @@ without MATLAB; its output is never presented as a clinical screening result.
 from __future__ import annotations
 
 import abc
+import math
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,10 @@ from ..models.schemas import (
     QualityResult,
 )
 from ..utils.errors import ErrorCode, RetinaSenseError
+
+# Process-wide shared MATLAB session (see MatlabAdapter._ensure_engine).
+_ENGINE: Any | None = None
+_ENGINE_LOCK = threading.Lock()
 
 
 class BaseMatlabAdapter(abc.ABC):
@@ -67,7 +73,13 @@ class MatlabAdapter(BaseMatlabAdapter):
         self._scripts_dir = scripts_dir
 
     def _ensure_engine(self) -> Any:
+        # Shared across requests: starting a fresh MATLAB session + loading the
+        # 90MB trained net per screening is too slow for a live deployment.
+        global _ENGINE
         if self._engine is not None:
+            return self._engine
+        if _ENGINE is not None:
+            self._engine = _ENGINE
             return self._engine
         if not MATLAB_ENGINE_AVAILABLE:
             raise RetinaSenseError(
@@ -77,20 +89,28 @@ class MatlabAdapter(BaseMatlabAdapter):
                 "RETINASENSE_SIMULATION=mock to exercise the labelled mock path.",
                 stage="matlab_adapter",
             )
-        try:
-            import matlab.engine  # type: ignore[import-not-found]
+        with _ENGINE_LOCK:
+            if _ENGINE is not None:
+                self._engine = _ENGINE
+                return self._engine
+            try:
+                import matlab.engine  # type: ignore[import-not-found]
 
-            self._engine = matlab.engine.start_matlab()
-            root = Path(self._scripts_dir or REPOSITORY_ROOT)
-            self._engine.addpath(str(root), nargout=0)
-            self._engine.addpath(genpath=str(root), nargout=0)
-            return self._engine
-        except Exception as exc:  # pragma: no cover - host-specific
-            raise RetinaSenseError(
-                ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
-                f"Could not start MATLAB Engine: {exc}",
-                stage="matlab_adapter",
-            )
+                engine = matlab.engine.start_matlab()
+                root = Path(self._scripts_dir or REPOSITORY_ROOT)
+                engine.addpath(str(root), nargout=0)
+                repo_paths = engine.genpath(str(root), nargout=1)
+                if repo_paths:
+                    engine.addpath(repo_paths, nargout=0)
+                _ENGINE = engine
+                self._engine = _ENGINE
+                return self._engine
+            except Exception as exc:  # pragma: no cover - host-specific
+                raise RetinaSenseError(
+                    ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
+                    f"Could not start MATLAB Engine: {exc}",
+                    stage="matlab_adapter",
+                )
 
     def run_pipeline(
         self,
@@ -98,36 +118,37 @@ class MatlabAdapter(BaseMatlabAdapter):
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
         eng = self._ensure_engine()
-        try:
-            # Real mode: mock=False -> runPipeline gates on cfg.model.available
-            # and loads the trained model + calibration artifacts. Never the
-            # mock MATLAB modules when this adapter is used.
-            fieldnames = ["quality", "grading", "calibrated", "explain", "review", "report"]
-            case_raw = eng.runPipeline(
-                self._to_matlab_meta(metadata),
-                str(image_path),
-                "mock",
-                False,
-                nargout=1,
-            )
-            case = _to_py(case_raw)
-        except RetinaSenseError:
-            raise
-        except Exception as exc:  # pragma: no cover - host-specific
-            msg = str(exc)
-            if "RetinaSense:runPipeline:MissingModel" in msg or "MissingModel" in msg:
+        with _ENGINE_LOCK:  # MATLAB engine calls are not thread-safe
+            try:
+                # Real mode: mock=False -> runPipeline gates on cfg.model.available
+                # and loads the trained model + calibration artifacts. Never the
+                # mock MATLAB modules when this adapter is used.
+                fieldnames = ["quality", "grading", "calibrated", "explain", "review", "report"]
+                case_raw = eng.runPipeline(
+                    self._to_matlab_meta(metadata),
+                    str(image_path),
+                    "mock",
+                    False,
+                    nargout=1,
+                )
+                case = _to_py(case_raw)
+            except RetinaSenseError:
+                raise
+            except Exception as exc:  # pragma: no cover - host-specific
+                msg = str(exc)
+                if "RetinaSense:runPipeline:MissingModel" in msg or "MissingModel" in msg:
+                    raise RetinaSenseError(
+                        ErrorCode.MODEL_UNAVAILABLE,
+                        "The trained model/calibration artifacts are missing. "
+                        "Run scripts/benchmark_backbones.m + run_all_experiments.m on a "
+                        "MATLAB host first.",
+                        stage="matlab_adapter",
+                    )
                 raise RetinaSenseError(
-                    ErrorCode.MODEL_UNAVAILABLE,
-                    "The trained model/calibration artifacts are missing. "
-                    "Run scripts/benchmark_backbones.m + run_all_experiments.m on a "
-                    "MATLAB host first.",
+                    ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
+                    f"MATLAB pipeline failed: {msg}",
                     stage="matlab_adapter",
                 )
-            raise RetinaSenseError(
-                ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
-                f"MATLAB pipeline failed: {msg}",
-                stage="matlab_adapter",
-            )
 
         if not isinstance(case, dict) or "quality" not in case:
             raise RetinaSenseError(
@@ -210,13 +231,16 @@ class MatlabAdapter(BaseMatlabAdapter):
         return result
 
     def stop(self) -> None:  # pragma: no cover - host-specific
-        """Release the MATLAB engine if one was started."""
-        if self._engine is not None:
+        """Release the shared MATLAB engine so the process can exit cleanly."""
+        global _ENGINE
+        engine = self._engine or _ENGINE
+        if engine is not None:
             try:
-                self._engine.quit()
+                engine.quit()
             except Exception:
                 pass
-            self._engine = None
+        _ENGINE = None
+        self._engine = None
 
 
 class MockMatlabAdapter(BaseMatlabAdapter):
@@ -324,27 +348,56 @@ def _to_py(value: Any) -> Any:
     if hasattr(value, "size") and isinstance(value, object) and not isinstance(value, (str, bytes)):
         # matlab.double / matlab.logical array
         try:
-            flattened = [float(v) for v in value]
-            if len(flattened) == 1:
-                return flattened[0]
-            return flattened
+            flat = _to_floats(value)
+            if flat is None:
+                return value
+            return flat[0] if len(flat) == 1 else flat
         except (TypeError, ValueError):
             return value
     return value
+
+
+def _to_floats(value: Any) -> list[float] | None:
+    """Flatten a MATLAB numeric array into a list of python floats.
+
+    Iterating a matlab.double of shape (1,5) yields ROW arrays, so a naive
+    ``[float(v) for v in value]`` fails.  numpy flattens over all elements and
+    handles any shape/scalar cell the engine can return.
+    """
+    try:
+        import numpy as np
+
+        arr = np.asarray(value, dtype=float)
+        return [float(v) for v in arr.flatten()] if arr.size else []
+    except (TypeError, ValueError):
+        return None
 
 
 def _scalar(value: Any) -> float | None:
     if value is None or isinstance(value, str):
         return None
     try:
-        return float(value)
+        v = float(value)
     except (TypeError, ValueError):
         return None
+    # Honest: a NaN/inf from the REAL MATLAB engine means "no decided scalar
+    # here" — exactly like a null. We never fabricate a number from it
+    # (Starlette also refuses to serialise NaN to JSON, so this prevents 500s).
+    if math.isnan(v) or math.isinf(v):
+        return None
+    return v
 
 
 def _scalar_int(value: Any) -> int | None:
     v = _scalar(value)
-    return int(v) if v is not None else None
+    if v is None:
+        return None
+    # Honest: a NaN/Nan/inf from the REAL MATLAB engine means "no decided
+    # scalar here" — exactly like a null. We never fabricate a grade by
+    # rounding a NaN to 0. Return None so the frontend shows an honest empty.
+    if math.isnan(v) or math.isinf(v):
+        return None
+    return int(v)
 
 
 def _scalar_bool(value: Any) -> bool | None:
@@ -358,9 +411,15 @@ def _vector(value: Any, length: int) -> list[float] | None:
     if isinstance(value, (int, float)):
         value = [value]
     try:
-        items = [float(v) for v in value]
+        items = _to_floats(value)
     except (TypeError, ValueError):
         return None
+    if items is None:
+        return None
     if len(items) != length:
+        return None
+    # Same honest rule as _scalar: a vector containing NaN/inf carries no
+    # usable numbers — drop it entirely rather than serialising non-finite.
+    if any(math.isnan(v) or math.isinf(v) for v in items):
         return None
     return items

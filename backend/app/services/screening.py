@@ -9,6 +9,7 @@ Handles:
 """
 from __future__ import annotations
 
+import math
 import uuid
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -80,6 +81,22 @@ def create_case(meta: CaseMeta | None = None) -> str:
     return case_id
 
 
+def _clean_json_floats(obj: Any) -> Any:
+    """Recursively replace non-finite floats with None.
+
+    A NaN/inf from the real MATLAB engine means "no decided number here" —
+    never a fabricated value. This also keeps responses JSON-serialisable
+    (Starlette's JSONResponse rejects NaN with a 500).
+    """
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _clean_json_floats(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_clean_json_floats(v) for v in obj]
+    return obj
+
+
 def run_screening(
     case_id: str,
     image_data: BinaryIO,
@@ -133,6 +150,11 @@ def run_screening(
         "status": "completed",
     }
 
+    # Boundary guard: adapter output must never leak NaN/inf into the JSON
+    # response (Starlette 500s on non-finite floats). Anything non-finite is
+    # an honest null, matching the adapter's own NaN policy.
+    screening = _clean_json_floats(screening)
+
     if quality_class == "ungradable":
         screening["status"] = "recapture_required"
         database_store.save_screening(case_id, screening)
@@ -148,6 +170,7 @@ def run_screening(
         screening["aiPrediction"] = {
             "grade": grade,
             "gradeLabel": GRADE_LABELS.get(grade, "Unknown") if grade is not None else None,
+            "probabilities": _clean_json_floats(list(grading_data.get("rawProbs") or [])) or None,
             "referable": grading_data.get("referable"),
             "confidence": calibrated_data.get("confidence"),
             "uncertainty": calibrated_data.get("uncertainty"),
@@ -170,8 +193,63 @@ def run_screening(
             "evidencePath": None,
         }
 
+    # Real explainability: compute genuine Grad-CAM attention from the trained
+    # model on the actual uploaded image (mirror of computeGradCAM.m). Honest
+    # fallback: when the model/torch is unavailable the block stays empty —
+    # attention is never fabricated. Analysis is advisory and non-blocking.
+    if screening["status"] == "completed":
+        _attach_real_explainability(case_id, img_path, screening)
+
+    # The explainability block must be self-consistent: a path set means the
+    # artifact is actually served; `available` is only true when the artifact
+    # is reachable. (The adapter may report the MATLAB engine produced
+    # attention but no image file — that is NOT a servable artifact.)
+    explain = screening.get("explainability")
+    if explain:
+        explain["gradCamAvailable"] = explain.get("gradCamPath") is not None
+        explain["evidenceAvailable"] = explain.get("evidencePath") is not None
+
+    screening = _clean_json_floats(screening)
     database_store.save_screening(case_id, screening)
     return screening
+
+
+def _attach_real_explainability(
+    case_id: str,
+    img_path: Path,
+    screening: dict[str, Any],
+) -> None:
+    """Compute and persist genuine Grad-CAM/evidence artifacts for a case.
+
+    Runs the real PyTorch Grad-CAM on the stored fundus image, persists the
+    overlays under data/artifacts/<caseId>/, and points the explainability
+    block at the served API paths. Failure leaves the block empty (advisory,
+    non-blocking) — it must never fabricate attention.
+    """
+    try:
+        from ..config import EXPLAIN_ENABLED
+        from ..services.artifacts import save_explain_artifacts
+        from ..services.explainability import compute_explain
+
+        if not EXPLAIN_ENABLED:
+            return
+        result = compute_explain(img_path)
+        if result is None:
+            return
+        refs = save_explain_artifacts(
+            case_id,
+            attention=result["attentionImage"],
+            evidence=result["evidenceOverlay"],
+        )
+        screening["explainability"] = {
+            "gradCamAvailable": refs.get("gradcam") is not None,
+            "gradCamPath": refs.get("gradcam"),
+            "evidenceAvailable": refs.get("evidence") is not None,
+            "evidencePath": refs.get("evidence"),
+        }
+    except Exception:
+        # Advisory only: keep the honest empty block on any failure.
+        pass
 
 
 def get_case(case_id: str) -> dict[str, Any] | None:

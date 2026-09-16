@@ -195,6 +195,18 @@ export async function fetchCaseImage(_caseId: string): Promise<Blob> {
   };
 }
 
+export async function fetchCaseArtifact(_caseId: string, _name: string): Promise<Blob> {
+  await delay();
+  // The demo client produces no real attention/evidence artifacts — an honest
+  // ARTIFACT_UNAVAILABLE, never a fabricated overlay.
+  throw {
+    kind: 'http',
+    code: 'ARTIFACT_UNAVAILABLE',
+    message: 'The demo client does not store or serve explainability artifacts.',
+    httpStatus: 404,
+  };
+}
+
 export async function submitReview(
   caseId: string,
   review: ReviewRequest,
@@ -325,4 +337,19 @@ export async function fetchCaseStats(): Promise<CaseStats> {
 export async function generateReport(caseId: string): Promise<ReportResponse> {
   await delay();
   return buildReportResponse(caseId);
+}
+
+/** DEMO sessions are implicit — a clearly-labelled pretend profile. */
+export async function fetchMe(): Promise<import('./types').UserInfo> {
+  await delay();
+  return { id: 0, username: 'demo', name: 'Demo Operator', role: 'ophthalmologist' };
+}
+
+/**
+ * DEMO mode has no real backend, so no PDF is fabricated. Refuses honestly —
+ * the UI shows an error instead of inventing a document.
+ */
+export async function fetchReportPdf(_caseId: string): Promise<Blob> {
+  await delay();
+  throw new Error('PDF reports are only available against the real (non-demo) backend.');
 }

@@ -3074,3 +3074,54 @@ input[type="file"] {
     scroll-behavior: auto !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   24. Sign-in + account
+   -------------------------------------------------------------------------- */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--rs-space-6);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-card__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-space-3);
+  margin-bottom: var(--rs-space-2);
+}
+
+.login-card__back {
+  justify-content: center;
+  margin-top: var(--rs-space-3);
+}
+
+.app-user {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-space-3);
+}
+
+.app-user__identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.app-user__name {
+  font-weight: 600;
+  font-size: var(--rs-text-sm);
+}
+
+.app-user__role {
+  font-size: var(--rs-text-xs);
+  opacity: 0.75;
+}

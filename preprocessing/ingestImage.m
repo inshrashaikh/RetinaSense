@@ -24,7 +24,7 @@ function c = ingestImage(meta, imagePath)
     p = preprocess_config();
 
     c = newCase();
-    c.meta = meta;
+    c.meta = normalizeMeta(meta);
 
     % --- Resolve input: file or synthetic mock ---
     if isempty(imagePath)
@@ -59,6 +59,28 @@ function c = ingestImage(meta, imagePath)
 
     c.image = downscaleToMax(c.image, p.maxWorkingSize);
     c.image = im2uint8(c.image);
+end
+
+function meta = normalizeMeta(meta)
+%NORMALIZEMETA  Canonicalize the ingestion metadata to the Case contract.
+%
+%   The Case meta contract (core/newCase.m) requires exactly the four fields
+%   patientId, eye, timestamp, phcId.  A caller (CLI, backend engine bridge,
+%   test) may supply only a subset (e.g. the API sends patientId/eye/phcId).
+%   Missing fields are filled with honest defaults so downstream modules
+%   (reporting/buildReport.m accesses meta.timestamp) never crash on an
+%   "Unrecognized field name" error.  Field values are passed through
+%   untouched — nothing is invented beyond the empty-value defaults.
+    req = struct('patientId', '', 'eye', '', 'timestamp', datestr(now, 'yyyy-mm-ddTHH:MM:SS'), 'phcId', '');
+    if ~isstruct(meta)
+        meta = struct();
+    end
+    names = fieldnames(req);
+    for i = 1:numel(names)
+        if ~isfield(meta, names{i})
+            meta.(names{i}) = req.(names{i});
+        end
+    end
 end
 
 function img = makeSyntheticImage(maxEdge)

@@ -12,12 +12,15 @@ import { BackendHealthChip } from './BackendHealthChip';
 import { Button } from './ui/Button';
 import { Icon, type IconName } from './ui/Icon';
 import { navigate, useHashPath } from '../router';
+import { clearSession, getUser } from '../auth/session';
 
 interface NavItem {
   label: string;
   path: string;
   icon: IconName;
   match: (path: string) => boolean;
+  /** When set, the group only shows for users allowed by this guard. */
+  requireReviewer?: boolean;
 }
 
 interface NavGroup {
@@ -48,6 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
         path: '/review',
         icon: 'inbox',
         match: (p) => p === '/review',
+        requireReviewer: true,
       },
       {
         label: 'Reports',
@@ -62,6 +66,11 @@ const NAV_GROUPS: NavGroup[] = [
 export function AppShell({ children, demoMode }: { children: ReactNode; demoMode: boolean }) {
   const [navOpen, setNavOpen] = useState(false);
   const path = useHashPath();
+  const user = getUser();
+  // Operators capture images and run screenings but never make the final
+  // clinical review decision. With no session (demo mode / fresh reload) the
+  // review destination stays visible — the backend enforces the role anyway.
+  const reviewNavVisible = !(user && user.role === 'phc_operator');
 
   // Close the mobile drawer whenever the hash route changes.
   useEffect(() => {
@@ -69,6 +78,16 @@ export function AppShell({ children, demoMode }: { children: ReactNode; demoMode
   }, [path]);
 
   const activeItem = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.match(path));
+
+  const navGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.requireReviewer || reviewNavVisible),
+  })).filter((group) => group.items.length > 0);
+
+  function signOut() {
+    clearSession();
+    navigate('/');
+  }
 
   return (
     <div className={`shell${navOpen ? ' shell--nav-open' : ''}`}>
@@ -98,7 +117,7 @@ export function AppShell({ children, demoMode }: { children: ReactNode; demoMode
           </button>
 
           <nav className="sidebar__nav" aria-label="Application navigation">
-            {NAV_GROUPS.map((group) => (
+            {navGroups.map((group) => (
               <div className="nav-group" key={group.label}>
                 <span className="nav-group__label">{group.label}</span>
                 {group.items.map((item) => {
@@ -144,6 +163,23 @@ export function AppShell({ children, demoMode }: { children: ReactNode; demoMode
               <span className="topbar__title">{activeItem?.label ?? 'RetinaSense'}</span>
             </div>
             <div className="topbar__right">
+              {user && (
+                <div className="app-user">
+                  <span className="app-user__identity">
+                    <span className="app-user__name">{user.name || user.username}</span>
+                    <span className="app-user__role">{user.role}</span>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="x"
+                    aria-label="Sign out"
+                    onClick={signOut}
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              )}
               {/* The CTA is redundant while the screening form itself is open. */}
               {path !== '/screening' && (
                 <Button
