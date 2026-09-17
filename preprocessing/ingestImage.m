@@ -5,7 +5,7 @@ function c = ingestImage(meta, imagePath)
 %
 %   meta:      struct with patientId, eye, timestamp, phcId
 %   imagePath: path to a JPG/PNG fundus image, OR '' to generate a synthetic
-%              mock image (Sprint 0: no datasets required).
+%              mock image (no datasets required).
 %
 %   Returns a Case whose 'image' is the downscaled working RGB (uint8, max edge
 %   <= config.preprocess.maxWorkingSize, aspect preserved) and 'meta' is set.

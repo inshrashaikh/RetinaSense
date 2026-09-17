@@ -12,7 +12,7 @@ import { getUser } from '../auth/session';
 import { friendlyError } from '../utils/errors';
 import { Button } from './ui/Button';
 import { Card, CardBody, CardHeader } from './ui/Card';
-import { Field, Input, Select, Textarea } from './ui/Form';
+import { Field, Select, Textarea } from './ui/Form';
 import { Badge } from './ui/Badge';
 import { Alert } from './ui/Alert';
 
@@ -35,13 +35,8 @@ export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
   const user = getUser();
   const [action, setAction] = useState<Action>('approve');
   const [overrideGrade, setOverrideGrade] = useState<number>(2);
-  // Pre-filled with the signed-in reviewer's display name (e.g. "Dr. Meera
-  // Rao") — the backend signs the review with the authenticated user anyway.
-  // Fall back to the username only if a stale session has no name yet.
-  const [reviewerId, setReviewerId] = useState(user?.name || user?.username || '');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
-  const [reviewerError, setReviewerError] = useState('');
 
   if (!ai || ai.grade === null) {
     return (
@@ -64,16 +59,14 @@ export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setReviewerError('');
-    if (!reviewerId.trim()) {
-      setReviewerError('Enter the reviewer (ophthalmologist) ID before submitting.');
-      return;
-    }
     setBusy(true);
     try {
       const res = await submitReview(caseId, {
         action,
-        reviewerId: reviewerId.trim(),
+        // The backend signs the review with the AUTHENTICATED user's display
+        // name and ignores this field; send it so the schema validates, and
+        // never let the client impersonate another reviewer.
+        reviewerId: user?.name || user?.username || '',
         overrideGrade: action === 'override' ? overrideGrade : null,
         notes,
       });
@@ -102,74 +95,70 @@ export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
       <CardBody>
         <Alert variant="info" title="How this is recorded" role="note">
           The AI result is preserved verbatim; your decision below is stored separately as
-          the final decision for this case.
+          the final decision for this case. The backend records the review against your
+          signed-in account.
         </Alert>
 
-        <form className="form" onSubmit={onSubmit} aria-label="Human review form">
-          <fieldset className="fieldset">
-            <legend className="fieldset__legend">Action</legend>
-            {ACTIONS.map((option) => (
-              <label className="radio-line" key={option.value}>
-                <input
-                  type="radio"
-                  name="action"
-                  value={option.value}
-                  aria-label={option.label}
-                  checked={action === option.value}
-                  onChange={() => setAction(option.value)}
-                />
-                <span className="radio-line__text">
-                  <span>{option.label}</span>
-                  <span className="radio-line__hint">{option.hint}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-
-          {action === 'override' && (
-            <Field label="Override DR grade">
-              <Select
-                value={overrideGrade}
-                onChange={(e) => setOverrideGrade(Number(e.target.value))}
-              >
-                {[0, 1, 2, 3, 4].map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-
-          <Field
-            label="Reviewer"
-            error={reviewerError || undefined}
-            hint="Signed-in reviewer name; recorded with the review."
-          >
-            <Input
-              type="text"
-              value={reviewerId}
-              onChange={(e) => setReviewerId(e.target.value)}
-              placeholder="Reviewer name"
-              autoComplete="off"
-            />
-          </Field>
-
-          <Field label="Notes">
-            <Textarea
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes…"
-            />
-          </Field>
-
-          <div className="btn-row">
-            <Button type="submit" variant="primary" icon="check" loading={busy}>
-              {busy ? 'Submitting review…' : 'Submit review'}
-            </Button>
+        <div className="meta-grid">
+          <div className="meta">
+            <span className="meta__label">Reviewer</span>
+            <span className="meta__value">
+              {user?.name || user?.username || 'Signed-in reviewer'}
+            </span>
           </div>
-        </form>
+        </div>
+
+        <form className="form" onSubmit={onSubmit} aria-label="Human review form">
+            <fieldset className="fieldset">
+              <legend className="fieldset__legend">Action</legend>
+              {ACTIONS.map((option) => (
+                <label className="radio-line" key={option.value}>
+                  <input
+                    type="radio"
+                    name="action"
+                    value={option.value}
+                    aria-label={option.label}
+                    checked={action === option.value}
+                    onChange={() => setAction(option.value)}
+                  />
+                  <span className="radio-line__text">
+                    <span>{option.label}</span>
+                    <span className="radio-line__hint">{option.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
+            {action === 'override' && (
+              <Field label="Override DR grade">
+                <Select
+                  value={overrideGrade}
+                  onChange={(e) => setOverrideGrade(Number(e.target.value))}
+                >
+                  {[0, 1, 2, 3, 4].map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+<Field label="Notes">
+          <Textarea
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional notes…"
+          />
+        </Field>
+
+        <div className="btn-row">
+          <Button type="submit" variant="primary" icon="check" loading={busy}>
+            {busy ? 'Submitting review…' : 'Submit review'}
+          </Button>
+        </div>
+      </form>
       </CardBody>
     </Card>
   );

@@ -14,10 +14,11 @@ function grading = classifyImage(image, net, params)
 %   benchmark_backbones) is supplied, the image is resized to the net input,
 %   normalized, and softmax probabilities come from predict().
 %
-%   MOCK path: if net is empty (no trained model), a deterministic pseudo-
-%   probability is produced from image content — clearly synthetic and flagged
-%   modelFile=''. It exists ONLY so the pipeline can run end-to-end before a
-%   model exists; it is never presented as clinical output (AGENTS.md no-fake-AI).
+%   MOCK path: if no trained network is supplied (net empty), a deterministic
+%   pseudo-probability is produced from image content — clearly synthetic and
+%   flagged modelFile=''. It exists ONLY so the pipeline can run end-to-end until
+%   a model is trained; it is never presented as clinical output (AGENTS.md
+%   no-fake-AI).
 
     cfg = experiment_config();
     if nargin < 3 || isempty(params); params = cfg.classification; end
@@ -73,8 +74,9 @@ function name = getNetName(net, cfg)
 end
 
 function grading = mockGrading(image, cfg, referThreshold)
-%MOCKGRADING  Deterministic pseudo-signal stand-in (no trained model). The
-% mock is explicit: it is not a model and must not be cited as clinical output.
+%MOCKGRADING  Deterministic pseudo-signal stand-in when no trained network is
+% supplied. The mock is explicit: it is not a model and must not be cited as
+% clinical output.
     m = cfg.mock;
     rng(m.seed, 'twister');
 
@@ -95,5 +97,5 @@ function grading = mockGrading(image, cfg, referThreshold)
         'grade',         grade, ...
         'referableProb', referableProb, ...
         'referable',     referable, ...
-        'modelFile', '');   % no trained model in mock
+        'modelFile', '');   % mock: no trained network file
 end

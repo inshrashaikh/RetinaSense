@@ -232,6 +232,12 @@ function entry = evaluate_scenario_entry(r, p, targetDaily)
     entry.patientsPerDay = p.patientsPerDay;
     entry.executionStatus= r.executionStatus;
 
+    % MEASURED KPIs (real SimEvents block statistics, may be NaN if sim
+    % did not run or the observable was unavailable).
+    entry.averageWaitingTime    = r.averageWaitingTime;
+    entry.queueLength           = r.queueLength;
+    entry.reviewerUtilization   = r.reviewerUtilization;
+
     % Analytical bottleneck calculation
     effAcqTime = p.acquisitionTimeMin / (1 - p.recaptureRate);
     cAcq = p.simTimeMin / effAcqTime;
@@ -268,6 +274,9 @@ function s = empty_scenario_summary()
         'patientsPerDay',          NaN, ...
         'executionStatus',         '', ...
         'dataType',                '', ...
+        'averageWaitingTime',      NaN, ...
+        'queueLength',             NaN, ...
+        'reviewerUtilization',     NaN, ...
         'simulatedThroughput',     NaN, ...
         'simulatedCapacity',       NaN, ...
         'simulatedBottleneck',     '', ...
@@ -385,7 +394,14 @@ function print_capacity_report(a)
 
     fprintf('Simulation Execution Status: %s\n', a.executionStatus);
     fprintf('Annual Target Feasibility:   %s\n', string(a.targetAchieved));
-    fprintf('Identified Bottleneck:       %s\n\n', a.bottleneckResource);
+    fprintf('Identified Bottleneck:       %s\n', a.bottleneckResource);
+    if strcmp(a.executionStatus, 'COMPLETE')
+        fprintf('Capacity basis:              MEASURED from simulation (baseline %.0f patients/year = %.1f/day)\n', ...
+            a.currentCapacity, a.currentCapacity / 365);
+    else
+        fprintf('Capacity basis:              ANALYTICAL ESTIMATE (Simulink execution PENDING - no fabricated results)\n');
+    end
+    fprintf('%s\n', repmat('-', 1, 95));
 
     fprintf('--- ANALYTICAL RESOURCE BOUNDS (Theoretical Estimates) ---\n');
     fprintf('1. Acquisition:  1 station = %.0f pts/day (req for 100k: %d station(s))\n', ...
@@ -414,16 +430,37 @@ function print_capacity_report(a)
     end
     fprintf('%s\n\n', repmat('=', 1, 95));
 
+    % Measured KPI section (real SimEvents block statistics)
+    fprintf('--- MEASURED KPIs (REAL SimEvents BLOCK STATISTICS) ---\n');
+    fprintf('%-18s | %-14s | %-14s | %-16s\n', ...
+        'Scenario', 'Avg Wait (s)', 'Queue Len', 'Reviewer Util');
+    fprintf('%s\n', repmat('-', 1, 95));
+    for i = 1:numel(a.scenarios)
+        s = a.scenarios(i);
+        if ~strcmp(s.executionStatus, 'SUCCESS')
+            fprintf('%-18s | %-14s | %-14s | %-16s\n', ...
+                s.scenario, 'PENDING', 'PENDING', 'PENDING');
+            continue;
+        end
+        %  KPIs are carried on the scenario entry itself
+        fprintf('%-18s | %-14s | %-14s | %-16s\n', ...
+            s.scenario, ...
+            ternary2(isnan(s.averageWaitingTime), 'n/a', sprintf('%.1f', s.averageWaitingTime)), ...
+            ternary2(isnan(s.queueLength), 'n/a', sprintf('%.2f', s.queueLength)), ...
+            ternary2(isnan(s.reviewerUtilization), 'n/a', sprintf('%.1f%%', s.reviewerUtilization * 100)));
+    end
+    fprintf('%s\n\n', repmat('=', 1, 95));
+
     % Scalability analysis section
     sa = a.scalabilityAnalysis;
     fprintf('--- SCALABILITY: 100,000 PATIENTS/YEAR (SIH 2026 PS 26038 TARGET) ---\n');
-    fprintf('Current measured capacity:  %.0f patients/year (%.1f/day)\n', ...
+    fprintf('Current capacity (from simulation): %.0f patients/year (%.1f/day)\n', ...
         sa.currentAnnualCapacity, sa.currentDailyThroughput);
-    fprintf('Target:                     %d patients/year (%.1f/day)\n', ...
+    fprintf('Target:                        %d patients/year (%.1f/day)\n', ...
         sa.targetAnnual, sa.targetDaily);
-    fprintf('Gap to target:              %.0f patients/year\n', sa.gapToTarget);
-    fprintf('Scaling factor needed:      %.2fx\n', sa.scalingFactor);
-    fprintf('Target achieved (analytical): %s\n', string(sa.isTargetAchieved));
+    fprintf('Gap to target:                 %.0f patients/year\n', sa.gapToTarget);
+    fprintf('Scaling factor needed:         %.2fx\n', sa.scalingFactor);
+    fprintf('Target achieved (MEASURED):    %s\n', string(sa.isTargetAchieved));
     fprintf('\nRequired resource changes for 100k/yr:\n');
     for i = 1:numel(sa.requiredChanges)
         fprintf('  - %s\n', sa.requiredChanges{i});
@@ -432,6 +469,17 @@ function print_capacity_report(a)
     fprintf('problem statement. The current prototype measures actual throughput;\n');
     fprintf('the scaling analysis above is an analytical what-if calculation.\n');
     fprintf('%s\n\n', repmat('=', 1, 95));
+end
+
+% -------------------------------------------------------------------------
+% Helpers
+% -------------------------------------------------------------------------
+function s = ternary2(cond, a, b)
+    if cond
+        s = a;
+    else
+        s = b;
+    end
 end
 
 % -------------------------------------------------------------------------

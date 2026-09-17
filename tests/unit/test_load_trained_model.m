@@ -21,9 +21,9 @@ end
 % =====================================================================
 
 function test_mockPathStillWorks(testCase)
-% Default runPipeline (mock=true) must keep the honest mock: modelFile='',
-% zero Grad-CAM map, safety note intact.
-    c = runPipeline('scenario', 'good');
+% Explicit mock runPipeline('mock', true) must keep the honest mock:
+% modelFile='', zero Grad-CAM map, safety note intact.
+    c = runPipeline('scenario', 'good', 'mock', true);
     verifyEqual(testCase, c.grading.modelFile, '');
     verifyTrue(testCase, all(c.explain.gradCam(:) == 0));
     verifyTrue(testCase, contains(lower(c.explain.note), 'attention'));

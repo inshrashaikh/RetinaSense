@@ -169,10 +169,10 @@ classdef RetinaSenseApp < handle
     methods (Access = public)
 
         function loadMockCase(app, scenario)
-        %LOADMOCKCASE  Run pipeline and load a mock case.
+        %LOADMOCKCASE  Run pipeline (labelled mock, explicit) and load the case.
             setStatus(app, 'Running pipeline...');
             try
-                c = runPipeline('scenario', scenario);
+                c = runPipeline('scenario', scenario, 'mock', true);
                 loadCase(app, c);
                 setStatus(app, sprintf('Loaded mock case: %s', scenario));
             catch ME

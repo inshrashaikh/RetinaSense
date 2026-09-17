@@ -97,6 +97,7 @@ assets/*.png
 codegen/
 slprj/
 simulink/slprj/
+simulink/output/
 *.slxc
 DRTelemedicine.slxc
 

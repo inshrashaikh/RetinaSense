@@ -12,6 +12,13 @@ function q = quality_thresholds()
 %     artifacts   -> higher is cleaner (fewer glare/sat/clipping)
 %
 %   References: docs/ARCHITECTURE.md §2 Stage 1.
+%
+%   SOURCE OF TRUTH / OVERRIDE: the committed values below stand until
+%   scripts/calibrate_quality_gate.m runs against a human-rated labeled subset
+%   (data/manifests/quality_labels.csv) and writes a validated override to
+%   qc.persist.overrideFile. When that file exists AND config/quality_calibration.m
+%   applyOverride is true, its fields replace the committed defaults — TODO(Sprint 1).
+%   Absent override, these defaults stand; nothing is auto-written or fabricated.
 
     q = struct();
 
@@ -48,4 +55,37 @@ function q = quality_thresholds()
     % Composite score >= goodScore => good (if no metric below borderline).
     q.goodScore      = 0.65;
     q.borderlineScore = 0.40;
+
+    % ---- Calibration override (Sprint 1 harness) ----
+    % scripts/calibrate_quality_gate.m persists a validated threshold set from
+    % a real experiment on a human-rated subset. quality_thresholds_override()
+    % returns that set when present + enabled; missing/corrupt/disabled always
+    % falls back to the committed defaults above (the gate never breaks).
+    ov = quality_thresholds_override();
+    if ~isempty(ov)
+        f = fieldnames(ov);
+        for i = 1:numel(f)
+            q.(f{i}) = ov.(f{i});
+        end
+    end
+end
+
+function ov = quality_thresholds_override()
+%QUALITY_THRESHOLDS_OVERRIDE  Load the persisted calibrated threshold set.
+    ov = struct();
+    try
+        qc = quality_calibration();
+        if ~qc.applyOverride; return; end
+        file = qc.persist.overrideFile;
+        if ~exist(file, 'file'); return; end
+        S = load(file, 'q');
+        if ~isfield(S, 'q') || ~isstruct(S.q); return; end
+        if ~all(isfield(S.q, {'focusNormalizeVar','metricLow','metricMid', ...
+                'weights','goodScore','borderlineScore'}))
+            return;   % incomplete override: keep committed defaults
+        end
+        ov = S.q;
+    catch
+        ov = struct();  % corrupt/inaccessible override must not break the gate
+    end
 end

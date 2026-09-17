@@ -32,8 +32,8 @@ TIMEOUT = 300.0
 USERNAME = "doctor"
 PASSWORD = "doctor123"
 
-GOOD_IMAGE = Path(r"D:\Project\RetinaSense\data\raw\aptos\images\0\img_0003.png")
-BAD_IMAGE = Path(r"D:\Project\RetinaSense\data\raw\IDRiD\C. Localization\C. Localization\1. Original Images\b. Testing Set\IDRiD_001.jpg")
+GOOD_IMAGE = Path(r"D:\Projects\RetinaSense\data\raw\aptos\images\0\img_0003.png")
+BAD_IMAGE = Path(r"D:\Projects\RetinaSense\data\raw\IDRiD\C. Localization\C. Localization\1. Original Images\b. Testing Set\IDRiD_001.jpg")
 
 failures: list[str] = []
 

@@ -15,9 +15,9 @@ function evidence = buildEvidence(vesselMask, opticDisc, fovea, lesions, params)
 %     evidence.confidence  'low' | 'medium' | 'high'
 %     evidence.opticDiscDetail  struct (optional, full localization result)
 %
-%   confidence encodes advisory certainty of the detections. Sprint 0 stubs
-%   return empty detections => confidence 'low' (honest), and analysis NEVER
-%   blocks grading.
+%   confidence encodes advisory certainty of the detections. Detectors that
+%   fail or find no candidates return empty evidence => confidence 'low'
+%   (honest), and analysis NEVER blocks grading.
 
     % Extract optic disc center for contract compliance [x,y] | []
     if isstruct(opticDisc) && isfield(opticDisc, 'center') && ~isempty(opticDisc.center)

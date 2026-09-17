@@ -26,7 +26,7 @@ end
 function testExplainabilityRunsAfterAnalysis(testCase)
 % Stage order must be analysis -> grading -> explainability, so evidence
 % exists before Grad-CAM needs it.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     ix = @(s) find(strcmp(c.pipeline.stages, s));
     verifyFalse(testCase, isempty(ix('analysis')));
     verifyTrue(testCase, ix('analysis') < ix('grading'));
@@ -36,7 +36,7 @@ end
 function testPipelineEvidenceReachesGradCAM(testCase)
 % The case carries evidence and the explainability output exposes the
 % independent evidence overlay (h x w x 3 uint8) sized to the image.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     verifyTrue(testCase, isfield(c.evidence, 'lesions'));
     verifyTrue(testCase, isfield(c.evidence, 'opticDiscDetail'));
     verifyEqual(testCase, size(c.explain.evidenceOverlay), ...
@@ -86,7 +86,7 @@ function testEvidenceDoesNotChangeGrading(testCase)
 % Whatever evidence the pipeline produces, the DR grade/referral depend only
 % on image + net: the pipeline grading equals a standalone image-only
 % classification.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     standalone = classifyImage(c.image, [], experiment_config().classification);
     verifyEqual(testCase, c.grading.rawProbs, standalone.rawProbs, 'AbsTol', 1e-12);
     verifyEqual(testCase, c.grading.grade, standalone.grade);
@@ -135,7 +135,7 @@ end
 
 function testMockPipelineFallbackHonest(testCase)
 % End-to-end mock: zero attention map + attention note, valid overlay.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     verifyEqual(testCase, c.grading.modelFile, '');
     verifyTrue(testCase, all(c.explain.gradCam(:) == 0));
     verifyTrue(testCase, all(c.explain.attentionImage(:) == 0));
@@ -148,7 +148,7 @@ end
 % =====================================================================
 
 function testGradCamNoteNotCausality(testCase)
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     note = lower(c.explain.note);
     verifyTrue(testCase, contains(note, 'model attention'));
     verifyTrue(testCase, contains(note, 'not proof of causality'));

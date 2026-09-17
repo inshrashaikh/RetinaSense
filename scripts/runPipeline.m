@@ -1,14 +1,19 @@
 function c = runPipeline(varargin)
 %RUNPIPELINE  RetinaSense main entry / pipeline orchestrator (CLI).
 %
-%   c = runPipeline()                          % run a default mock case
+%   c = runPipeline()                          % run a default real screening case
 %   c = runPipeline(meta, imagePath)           % single ingestion entry (§1)
 %   c = runPipeline(meta, imagePath, reviewerInput)
 %   c = runPipeline(caseIn)                    % continue from an existing case
 %
 %   Name-value options (first arg parsed if a string):
-%     'scenario', 'good'|'borderline'|'ungradable'   force mock outcome (tests/demo)
+%     'scenario', 'good'|'borderline'|'ungradable'   force a scenario (tests/demo)
 %     'mock', true|false                             enable/disable mock modules
+%
+%   Screening defaults to the real trained model ('mock' defaults to false);
+%   mock runs only when explicitly requested via 'mock', true (tests/demo).
+%   Missing benchmark/model artifacts raise structured errors: no silent
+%   fallback to mock.
 %
 %   Wires the stages in order (docs/ARCHITECTURE.md §2):
 %     Image -> Quality Gate -> Enhancement(borderline) -> Re-check
@@ -29,7 +34,7 @@ function c = runPipeline(varargin)
 
     if ~opts.mock && ~cfg.model.available
         raiseError('runPipeline', 'MissingModel', ...
-            'No trained model present. Train first (Sprint 2+) or run the mock (mock=true).');
+            'No trained model selected. Run scripts/benchmark_backbones.m to choose a backbone, or pass ''mock'', true for the labelled test/demo path.');
     end
 
     % ---------- Ingest ----------
@@ -72,7 +77,12 @@ function c = runPipeline(varargin)
             c.enhancement.recheckClass = enhMeta.recheckClass;
             if ok
                 c.image = imgEnh;
-                c.quality = recheck;
+                % Keep the gate's routing class on the case: the routed image
+                % WAS 'borderline' and took the Stage 3-4 enhancement path.
+                % The post-enhancement recheck outcome lives in
+                % c.enhancement.recheckClass / c.enhancement.improved, so
+                % c.quality always describes the ROUTED (pre-enhancement)
+                % image and never over-claims the enhanced pixels.
             else
                 c.quality.recapture = recheck.recapture;
                 c.pipeline.exitStage = 'enhancementRecheck';
@@ -106,11 +116,11 @@ function c = runPipeline(varargin)
         end
 
         % ---------- Stage 6: DR grading ----------
-        % With mock=true (no trained artifacts) net stays [] and classifyImage
-        % uses its honest mock path. With mock=false a real trained artifact
-        % is loaded (gated by cfg.model.available above) and used for BOTH
-        % grading and Grad-CAM, so real models reach every consumer exactly
-        % once per case.
+        % Default (mock=false) loads the real trained artifact (gated by
+        % cfg.model.available above) and uses it for BOTH grading and
+        % Grad-CAM, so real models reach every consumer exactly once per
+        % case. mock=true keeps net=[] and classifyImage uses its honest
+        % mock path (labelled test/demo only).
         net = [];
         if ~opts.mock
             net = loadTrainedModel(cfg);
@@ -125,11 +135,11 @@ function c = runPipeline(varargin)
         c = addStage(c, 'explainability');
 
         % ---------- Stage 8: Calibration + confidence/uncertainty ----------
-        % With mock=true, T stays [] and applyCalibration uses the config
-        % identity (cfg.calibration.temperature = 1). With mock=false the
-        % matching fitted temperature is loaded and applied — never the
-        % identity when a real calibration artifact exists; a missing/invalid
-        % artifact raises a structured loadCalibration error.
+        % Default (mock=false) loads the matching fitted temperature and
+        % applies it — never identity when a real calibration artifact
+        % exists; a missing/invalid artifact raises a structured
+        % loadCalibration error. mock=true keeps T=[] (identity, labelled
+        % test/demo only).
         T = [];
         if ~opts.mock
             T = loadCalibration(cfg);
@@ -203,7 +213,7 @@ end
 function opts = parseArgs(args)
     opts = struct('in', [], 'meta', struct('patientId','demo001','eye','right', ...
                'timestamp', datestr(now,'yyyy-mm-ddTHH:MM:SS'), 'phcId','PHC-TEST'), ...
-               'imagePath', '', 'reviewerInput', [], 'mock', true, 'scenario', '');
+               'imagePath', '', 'reviewerInput', [], 'mock', false, 'scenario', '');
 
     if isempty(args); return; end
 

@@ -12,7 +12,6 @@ const api = vi.hoisted(() => ({
   listCases: vi.fn(async () => []),
   fetchCaseImage: vi.fn(async () => new Blob()),
   submitReview: vi.fn(),
-  fetchReport: vi.fn(),
   fetchHealth: vi.fn(),
 }));
 
@@ -24,7 +23,6 @@ vi.mock('../src/api/endpoints', () => ({
   listCases: api.listCases,
   fetchCaseImage: api.fetchCaseImage,
   submitReview: api.submitReview,
-  fetchReport: api.fetchReport,
   fetchHealth: api.fetchHealth,
 }));
 

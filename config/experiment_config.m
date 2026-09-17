@@ -9,8 +9,8 @@ function cfg = experiment_config()
 %   config/classification_config.m for the grouped constants.
 %
 %   Backbone is benchmark-driven (docs/ARCHITECTURE.md §3.2); it is NOT pinned
-%   until scripts/benchmark_backbones.m selects it. In Sprint 0 the pipeline
-%   uses the mock; model.available=false.
+%   until scripts/benchmark_backbones.m selects it. Until a model is chosen the
+%   pipeline uses the mock; model.available=false.
 
     cfg = struct();
 
@@ -63,9 +63,9 @@ function cfg = experiment_config()
     % ---- Referable DR threshold (Level 2+) ----
     cfg.referThreshold = 2;   % grade >= 2 is "referable DR" (config/classification_config)
 
-    % ---- Mock / Sprint-0 flags ----
+    % ---- Mock flags (explicit opt-in only; screening uses the real model) ----
     cfg.mock = struct( ...
-        'enabled', true, ...           % true -> run mock modules, no trained models
+        'enabled', false, ...          % mock runs only via 'mock', true (tests/demo)
         'seed',    1, ...              % deterministic mock outputs
         'maxGradable', 0.85);          % mock: prob an image is graded 'good'
 
@@ -73,7 +73,9 @@ function cfg = experiment_config()
     cfg.model = struct( ...
         'backbone',  '', ...       % 'resnet50' | 'efficientnetb0' | '' (unset)
         'metrics',   struct(), ... % benchmark four-axis table (SE,SP,AUROC,latency,size)
-        'available', false);       % true only after training + artifacts exist
+        'targetsMet', false, ...   % honest benchmark outcome (not a gate)
+        'available', false);       % true when a backbone is selected (record present);
+                                   % artifact presence/validity enforced at load time
 
     cfg.model = loadModelRecord(cfg.model);   % reads data/models/backbone_benchmark.json
 end
@@ -84,19 +86,28 @@ function model = loadModelRecord(model)
 % chosen backbone + metrics into cfg.model. This is the single place a
 % benchmark decision becomes visible to the rest of the pipeline.
     recFile = fullfile(paths().data.models, 'backbone_benchmark.json');
-    if ~exist(recFile, 'file'); return; end        % no benchmark yet (mock)
+    if ~exist(recFile, 'file'); return; end        % no record yet (real model unavailable)
     try
         rec = jsondecode(fileread(recFile));
         model.backbone  = rec.chosenBackbone;
         % perBackbone is the supplementary four-axis table; a valid decision
-        % record may omit it without invalidating the chosen backbone or the
-        % targets-met decision.
+        % record may omit it without invalidating the chosen backbone.
         if isfield(rec, 'perBackbone')
             model.metrics   = rec.perBackbone;
         end
-        model.available = rec.targetsMet;          % clinically acceptable => usable
+        % 'available' = a backbone was actually chosen by the benchmark run.
+        % It is decoupled from rec.targetsMet: the real trained artifact is
+        % the screening default even while clinical targets are still being
+        % reached. Artifact presence/validity is enforced at load time by
+        % loadTrainedModel/loadCalibration (clear structured errors, no
+        % silent mock fallback).
+        model.available = ~isempty(rec.chosenBackbone);
+        if isfield(rec, 'targetsMet')
+            % Honest, non-gating record of the measurable outcome.
+            model.targetsMet = rec.targetsMet;
+        end
     catch
         % A corrupt/partial record must not break pipeline startup; leave the
-        % model unavailable so callers behave as if untrained.
+        % model unavailable so callers can fall back to explicit mock only.
     end
 end

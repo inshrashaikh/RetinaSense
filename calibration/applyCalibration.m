@@ -11,8 +11,9 @@ function cal = applyCalibration(grading, T, params)
 %     cal.reviewRequired   logical      = confidence<confLow | uncertainty>uncHigh | forced
 %
 %   RetinaSense refuses to treat raw softmax as calibrated certainty (§3.7/FR-08).
-%   In Sprint 0, with no trained model, T=1 (identity): calibrated = raw probs of
-%   the mock grading. The entropy math here is real and tested.
+%   Before a temperature is fitted (or in the no-model fallback), T=1
+%   (identity): calibrated = raw probs of the grading output. The entropy math
+%   here is real and tested.
 %
 %   TODO(Sprint 3): use T fit by fitTemperature on real validation logits.
 

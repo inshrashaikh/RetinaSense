@@ -43,6 +43,19 @@ function r = report_config()
         'interpolation',   'bilinear', ...
         'showColorbar',    false);
 
+    % ---- Visualization page layout (page 2 PDF) ----
+    % Normalized figure coordinates (each axis = one page width/height).
+    r.visuals = struct( ...
+        'titleY',        0.955, ... % page 2 title baseline
+        'statusY',       0.910, ... % availability status line
+        'noteY',         0.875, ... % Grad-CAM note line
+        'rowTop',        0.840, ... % top of the image panel row
+        'panelWidth',    0.260, ... % width of each panel (square panels)
+        'panelGap',      0.040, ... % gap between consecutive panels
+        'panelStartX',   0.065, ... % x of the first panel
+        'labelFontSize', 10, ...    % caption under each panel
+        'noteFontSize',  8);        % placeholder / footer text size
+
     % ---- Content Sections ----
     r.sections = struct( ...
         'caseInfo',       true, ...

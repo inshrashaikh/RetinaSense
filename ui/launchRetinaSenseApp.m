@@ -29,7 +29,7 @@ function launchRetinaSenseApp(varargin)
             fprintf('Required: MATLAB R2016b+ with App Designer support.\n');
             fprintf('\n');
             fprintf('To test the review workflow without UI:\n');
-            fprintf('  c = runPipeline(''scenario'', ''good'');\n');
+            fprintf('  c = runPipeline(''scenario'', ''good'', ''mock'', true);\n');
             fprintf('  cfg = experiment_config();\n');
             fprintf('  review = submitReview(c, struct(''action'',''approve'',...\n');
             fprintf('      ''graderId'',''OPH-01'',''overrideGrade'',NaN,''notes'',''''), cfg);\n');

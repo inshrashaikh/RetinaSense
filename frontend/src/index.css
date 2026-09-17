@@ -2658,6 +2658,33 @@ input[type="file"] {
   color: var(--rs-text-soft);
 }
 
+/* Explainability artifact card (figure) — real Grad-CAM / evidence overlays
+   served by the backend. Only rendered when the pipeline actually produced
+   the artifact; never a stand-in image. */
+.artifact-figure {
+  margin: var(--rs-space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-space-2);
+}
+
+.artifact-figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  border-radius: var(--rs-radius);
+  border: 1px solid var(--rs-border);
+  background: var(--rs-mint);
+  box-shadow: var(--rs-shadow-xs);
+  object-fit: contain;
+}
+
+.artifact-figure figcaption {
+  font-size: var(--rs-text-xs);
+  color: var(--rs-muted);
+}
+
 .block {
   display: flex;
   flex-direction: column;
@@ -2777,6 +2804,20 @@ input[type="file"] {
   line-height: 1.7;
   font-size: var(--rs-text-base);
   -webkit-font-smoothing: antialiased;
+}
+
+/* ErrorBoundary fallback — a render crash shows this instead of a blank app. */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--rs-space-3);
+  padding: var(--rs-space-7);
+  background: var(--rs-surface);
+  border: 1px solid var(--rs-danger-border);
+  border-radius: var(--rs-radius-lg);
+  box-shadow: var(--rs-shadow-sm);
+  max-width: var(--rs-container-narrow);
 }
 
 .report-footer {

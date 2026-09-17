@@ -62,7 +62,7 @@ function test_mockGoodCaseLoads(testCase)
         if contains(ME.identifier, 'uifigure') || contains(ME.message, 'uifigure') || ...
                 contains(ME.message, 'No suitable')
             % Test the pipeline directly (UI not available)
-            c = runPipeline('scenario', 'good');
+            c = runPipeline('scenario', 'good', 'mock', true);
             verifyTrue(testCase, ~isempty(c.image), 'Case image empty');
             verifyTrue(testCase, c.grading.grade >= 0, 'Grade invalid');
             verifyTrue(testCase, ~isempty(c.evidence.vesselMask), 'Vessel mask empty');
@@ -91,7 +91,7 @@ function test_mockBorderlineCaseLoads(testCase)
         delete(app);
     catch ME
         if contains(ME.message, 'uifigure') || contains(ME.message, 'No suitable')
-            c = runPipeline('scenario', 'borderline');
+            c = runPipeline('scenario', 'borderline', 'mock', true);
             verifyEqual(testCase, c.quality.class, 'borderline');
         else
             rethrow(ME);
@@ -105,7 +105,7 @@ end
 
 function test_fullEvidenceCase(testCase)
 %TEST_FULLEVIDENCECASE  Verify a case with all evidence fields displays correctly.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     % Verify all evidence fields are populated
     verifyTrue(testCase, isstruct(c.evidence));
@@ -206,7 +206,7 @@ end
 
 function test_missingGradCamGraceful(testCase)
 %TEST_MISSINGGRADCAMGRACEFUL  Verify Grad-CAM is handled when net is empty.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     % With empty net, gradCam should be zeros (honest)
     verifyTrue(testCase, all(c.explain.gradCam(:) == 0) || ...
@@ -220,7 +220,7 @@ end
 
 function test_approveWorkflow(testCase)
 %TEST_APPROVEWORKFLOW  Verify approve action through submitReview.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct( ...
@@ -245,7 +245,7 @@ end
 
 function test_overrideWorkflow(testCase)
 %TEST_OVERRIDEWORKFLOW  Verify override action through submitReview.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct( ...
@@ -265,7 +265,7 @@ end
 
 function test_overrideGradePreservesOriginal(testCase)
 %TEST_OVERRIDEGRADEPRESERVESORIGINAL  Verify override does not modify original grading.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     originalGrade = c.grading.grade;
     originalProbs = c.grading.rawProbs;
     cfg = experiment_config();
@@ -289,7 +289,7 @@ end
 
 function test_recaptureWorkflow(testCase)
 %TEST_RECAPTUREWORKFLOW  Verify recapture action through submitReview.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct( ...
@@ -308,7 +308,7 @@ end
 
 function test_autoReview(testCase)
 %TEST_AUTOREVIEW  Verify auto-review when no reviewer input is provided.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     review = submitReview(c, [], cfg);
@@ -322,7 +322,7 @@ end
 
 function test_reviewRequiresAction(testCase)
 %TEST_REVIEWREQUIRESACTION  Verify invalid review action raises error.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct( ...
@@ -337,7 +337,7 @@ end
 
 function test_overrideRequiresValidGrade(testCase)
 %TEST_OVERRIDERQUIRESVALIDGRADE  Verify override with invalid grade raises error.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct( ...
@@ -356,7 +356,7 @@ end
 
 function test_reportGenerationAfterApprove(testCase)
 %TEST_REPORTGENERATIONAFTERAPPROVE  Verify report can be built after approval.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct( ...
@@ -383,7 +383,7 @@ end
 
 function test_reportContainsEvidence(testCase)
 %TEST_REPORTCONTAINSEVIDENCE  Verify report data contains evidence fields.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     report = buildReport(c, cfg);
@@ -411,7 +411,7 @@ end
 
 function test_reportContainsGradeLabel(testCase)
 %TEST_REPORTCONTAINSGRADELABEL  Verify report has grade label string.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     report = buildReport(c, cfg);
@@ -428,7 +428,7 @@ end
 
 function test_regressionBatch1OpticDisc(testCase)
 %TEST_REGRESSIONBATCH1OPTICDISC  Verify optic disc field contract (Batch 1).
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     % evidence.opticDisc
     verifyTrue(testCase, isfield(c.evidence, 'opticDisc'));
@@ -449,7 +449,7 @@ end
 
 function test_regressionBatch1Fovea(testCase)
 %TEST_REGRESSIONBATCH1FOVEA  Verify fovea field contract (Batch 1).
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     verifyTrue(testCase, isfield(c.evidence, 'fovea'));
     verifyTrue(testCase, isempty(c.evidence.fovea) || ...
@@ -458,7 +458,7 @@ end
 
 function test_regressionBatch2VesselMask(testCase)
 %TEST_REGRESSIONBATCH2VESSELMASK  Verify vessel mask field contract (Batch 2).
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     verifyTrue(testCase, isfield(c.evidence, 'vesselMask'));
     if ~isempty(c.evidence.vesselMask)
@@ -469,7 +469,7 @@ end
 
 function test_regressionBatch3Lesions(testCase)
 %TEST_REGRESSIONBATCH3LESIONS  Verify all four lesion classes (Batch 3).
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     verifyTrue(testCase, isfield(c.evidence, 'lesions'));
     classes = {'exudates', 'hemorrhages', 'microaneurysms', 'neoVasc'};
@@ -487,7 +487,7 @@ end
 
 function test_regressionBatch4Report(testCase)
 %TEST_REGRESSIONBATCH4REPORT  Verify report structure (Batch 4).
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     report = buildReport(c, cfg);
@@ -513,7 +513,7 @@ end
 
 function test_regressionEvidenceConfidence(testCase)
 %TEST_REGRESSIONEVIDENCECONFIDENCE  Verify evidence confidence is valid string.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     verifyTrue(testCase, isfield(c.evidence, 'confidence'));
     verifyTrue(testCase, ismember(c.evidence.confidence, {'low', 'medium', 'high'}));
@@ -521,7 +521,7 @@ end
 
 function test_regressionCalibration(testCase)
 %TEST_REGRESSIONCALIBRATION  Verify calibration structure (Batch 1-4).
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     verifyTrue(testCase, isfield(c.calibrated, 'calibratedProbs'));
     verifyTrue(testCase, isfield(c.calibrated, 'confidence'));
@@ -535,7 +535,7 @@ end
 
 function test_regressionGradeRange(testCase)
 %TEST_REGRESSIONGRADERANGE  Verify DR grade is in 0..4.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
 
     verifyTrue(testCase, c.grading.grade >= 0 && c.grading.grade <= 4);
     verifyTrue(testCase, numel(c.grading.rawProbs) == 5);
@@ -573,7 +573,7 @@ end
 
 function test_endToEndApproveAndReport(testCase)
 %TEST_ENDTOENDAPPROVEANDREPORT  Full workflow: load -> review -> approve -> report.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     % Approve
@@ -594,7 +594,7 @@ end
 
 function test_endToEndOverrideAndReport(testCase)
 %TEST_ENDTOENDOVERRIDEANDREPORT  Full workflow: load -> review -> override -> report.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     % Override
@@ -619,7 +619,7 @@ end
 
 function test_approveSetsFinalGrade(testCase)
 %TEST_APPROVESETSGRADE  Verify approve action sets finalGrade to AI grade.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct('action', 'approve', 'graderId', 'FG-01', ...
@@ -635,7 +635,7 @@ end
 
 function test_overrideSetsFinalGrade(testCase)
 %TEST_OVERRIDESETSGRADE  Verify override sets finalGrade to overrideGrade.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct('action', 'override', 'graderId', 'FG-02', ...
@@ -650,7 +650,7 @@ end
 
 function test_autoReviewSetsFinalGrade(testCase)
 %TEST_AUTOREVIEWSETSGRADE  Verify auto-review sets finalGrade to AI grade.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     review = submitReview(c, [], cfg);
@@ -661,7 +661,7 @@ end
 
 function test_recaptureSetsFinalGradeNaN(testCase)
 %TEST_RECAPTURESETSGRADE  Verify recapture sets finalGrade to NaN.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct('action', 'recapture', 'graderId', 'FG-03', ...
@@ -675,7 +675,7 @@ end
 
 function test_overridePreservesOriginalGrading(testCase)
 %TEST_OVERRIDEPRESERVESORIGINALGRADING  Verify override does not modify caseData.grading.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     origGrade = c.grading.grade;
@@ -701,7 +701,7 @@ function test_finalGradeLabelValid(testCase)
     validLabels = {'No DR', 'Mild NPDR', 'Moderate NPDR', 'Severe NPDR', 'Proliferative DR', ...
                    'Pending recapture', 'Unknown'};
     for grade = 0:4
-        c = runPipeline('scenario', 'good');
+        c = runPipeline('scenario', 'good', 'mock', true);
         cfg = experiment_config();
         reviewerInput = struct('action', 'override', 'graderId', 'T', ...
             'overrideGrade', grade, 'notes', '');
@@ -717,7 +717,7 @@ end
 
 function test_reportContainsFinalGrade(testCase)
 %TEST_REPORTCONTAINSGRADE  Verify report data contains finalGrade and aiGradeImmutable.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     % Approve and build report
@@ -735,7 +735,7 @@ end
 
 function test_reportOverrideShowsFinalGrade(testCase)
 %TEST_REPORTOVERRIDESHOWSGRADE  Verify report carries override finalGrade.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct('action', 'override', 'graderId', 'RPT-FGO', ...
@@ -751,7 +751,7 @@ end
 
 function test_reportContainsCalibratedProbs(testCase)
 %TEST_REPORTCONTAINSCALIBRATEDPROBS  Verify report data contains calibratedProbs.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     report = buildReport(c, cfg);
@@ -768,7 +768,7 @@ end
 
 function test_recaptureReviewFinalState(testCase)
 %TEST_RECAPTUREREVIEWFINALSTATE  Verify recapture review state on an ungradable case.
-    c = runPipeline('scenario', 'ungradable');
+    c = runPipeline('scenario', 'ungradable', 'mock', true);
     cfg = experiment_config();
 
     reviewerInput = struct('action', 'recapture', 'graderId', 'UN-01', ...
@@ -784,7 +784,7 @@ end
 
 function test_ungradableStopsGradingAndRecaptures(testCase)
 %TEST_UNGRADABLESTOPSGRADING  Quality gate must stop grading and produce recapture state.
-    c = runPipeline('scenario', 'ungradable');
+    c = runPipeline('scenario', 'ungradable', 'mock', true);
     cfg = experiment_config();
 
     % Quality gate stops grading honestly: no real AI grade was produced.
@@ -825,7 +825,7 @@ end
 
 function test_aiPredictionAndFinalDecisionSeparated(testCase)
 %TEST_AIPREDICTIONANDFINALDECISIONSEPARATED  AI grade stays immutable; human decision carried separately.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
     origGrade = c.grading.grade;
 
@@ -852,7 +852,7 @@ end
 
 function test_reportNoFabricatedValues(testCase)
 %TEST_REPORTNOFABRICATEDVALUES  All decision-relevant report values trace back to case data.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
     c.review = submitReview(c, struct('action', 'approve', 'graderId', 'NF-01', ...
         'overrideGrade', NaN, 'notes', ''), cfg);
@@ -879,7 +879,7 @@ end
 
 function test_reviewRequiredValueThroughReport(testCase)
 %TEST_REVIEWREQUIREDVALUETHROUGHTREPORT  reviewRequired flag flows into the report.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     c.calibrated.reviewRequired = true;   % mock/test flag, not a clinical claim
     cfg = experiment_config();
 
@@ -898,7 +898,7 @@ end
 
 function test_missingGradCamEvidenceRenders(testCase)
 %TEST_MISSINGGRADCAMEVIDENCERENDERS  Missing optional Grad-CAM/evidence must not crash reporting.
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     cfg = experiment_config();
 
     % Strip optional AI/explainability outputs to honest 'not available' state.

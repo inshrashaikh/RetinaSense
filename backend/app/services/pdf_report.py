@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -185,12 +186,19 @@ def build_report_pdf(case_id: str) -> Path:
     if img_path is not None:
         img_cols: list = []
         try:
+            # reportlab defers image decode to build time, so a stored file
+            # that does not actually decode would 500 the whole download.
+            # Validate up-front so it falls back to the honest placeholder.
+            with PILImage.open(str(img_path)) as _im:
+                _im.load()
             img_cols.append(Image(str(img_path), width=7.5 * cm, height=7.5 * cm))
         except Exception:
             img_cols.append(Paragraph("<i>Fundus image unavailable for embedding.</i>", body))
         gcam_path = _artifact_path(case_id, "gradcam")
         if gcam_path is not None:
             try:
+                with PILImage.open(str(gcam_path)) as _im:
+                    _im.load()
                 img_cols.append(Image(str(gcam_path), width=7.5 * cm, height=7.5 * cm))
             except Exception:
                 pass

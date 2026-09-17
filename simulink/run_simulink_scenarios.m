@@ -17,23 +17,27 @@ function results = run_simulink_scenarios(scenariosToRun)
 %   KPI Data Sources (honest labeling):
 %     MEASURED from simulation:
 %       - completedPatients, throughput (patients/day), annualCapacity
+%       - averageWaitingTime, queueLength, reviewerUtilization
+%         Read directly from REAL SimEvents block statistics (Acquisition
+%         Queue AverageWait/AverageQueueLength, Review Server Utilization,
+%         Completed Sink NumberEntitiesArrived). The statistics are enabled
+%         POST-BUILD (instrument_for_kpis.m) as passive listeners - enabling
+%         them during build would alter entity structure and break the Input
+%         Switch merges (R2026a), so the checked-in model stays clean and
+%         instrumentation provably does not perturb throughput.
 %     ANALYTICAL ESTIMATES from model parameters (M/M/1 approximations):
-%       - meanWaitingTime, maxWaitingTime, queueLength
+%       - meanWaitingTime, maxWaitingTime
 %       - acqUtilization, networkUtilization, aiUtilization, revUtilization
 %       - bottleneck (highest utilization resource)
-%
-%   R2026a SimEvents limitation: Per-block stats (Utilization, AverageWait)
-%   are enable-flags only; stat output ports cannot be read post-simulation
-%   without wiring to logged sinks. KPI estimates are computed analytically
-%   from the same parameters used by the model.
 %
 %   Outputs:
 %     results - 1xN struct array with fields:
 %       scenario, bandwidthMbps, numReviewers, patientsPerDay,
 %       throughput (MEASURED), completedPatients (MEASURED),
 %       annualCapacity (MEASURED),
+%       averageWaitingTime (MEASURED), queueLength (MEASURED),
+%       reviewerUtilization (MEASURED),
 %       meanWaitingTime (ANALYTICAL), maxWaitingTime (ANALYTICAL),
-%       queueLength (ANALYTICAL),
 %       acqUtilization (ANALYTICAL), aiUtilization (ANALYTICAL),
 %       revUtilization (ANALYTICAL), networkUtilization (ANALYTICAL),
 %       bottleneck (ANALYTICAL),
@@ -91,6 +95,16 @@ function results = run_simulink_scenarios(scenariosToRun)
     % 3. Print readable comparison table and detailed KPI report
     print_results_table(results);
     print_kpi_report(results);
+
+    % 4. Persist the real (non-fabricated) results to JSON for the audit trail
+    persist_results_json(results);
+
+    % 5. Close the (instrumented, therefore dirty) model cleanly so the exit
+    %    does not warn about unsaved changes; instrumentation is by design a
+    %    runtime-only modification and the committed .slx stays flow-only.
+    if env.isExecutable && bdIsLoaded('DRTelemedicine')
+        close_system('DRTelemedicine', 0);
+    end
 end
 
 % -------------------------------------------------------------------------
@@ -109,14 +123,25 @@ function res = simulate_scenario(p, sc, modelPath)
         % scenario run (arrival draws, gate draws, service-time draws).
         rng(p.seed);
 
+        % Runtime KPI instrumentation (post-build, passive stat listeners):
+        % enables buffet stats that MUST NOT be enabled during build (they
+        % would change entity structure and break the Input Switch merges).
+        instrument_for_kpis(modelName);
+
         simOut = sim(modelName, 'StopTime', num2str(p.simTimeMin * 60));
 
         if ~isempty(simOut)
-            % Extract completed patients from logged signal (MEASURED)
-            % R2026a logsout: signal name may be empty; scan by class.
-            if isprop(simOut, 'completedPatients') || isfield(simOut, 'completedPatients')
-                res.completedPatients = simOut.completedPatients;
-            elseif isprop(simOut, 'logsout') && ~isempty(simOut.logsout)
+            % MEASURED sink counts (To Workspace, one per counter)
+            kpi = measured_kpis(simOut, p);
+            res.completedPatients    = kpi.completed;
+            res.averageWaitingTime   = kpi.averageWaitingTime;
+            res.queueLength          = kpi.queueLength;
+            res.reviewerUtilization  = kpi.reviewerUtilization;
+
+            % Fallback: log the completed count from logsout when the To
+            % Workspace variable is unavailable (older / re-instrumented model).
+            if isnan(res.completedPatients) ...
+                    && isprop(simOut, 'logsout') && ~isempty(simOut.logsout)
                 found = false;
                 for ei = 1:numel(simOut.logsout)
                     el = simOut.logsout.get(ei);
@@ -124,7 +149,7 @@ function res = simulate_scenario(p, sc, modelPath)
                         continue;
                     end
                     if strcmp(el.Name, 'completedPatients')
-                        res.completedPatients = el.Values.Data(end);
+                        res.completedPatients = last_sample(el);
                         found = true;
                         break;
                     end
@@ -133,7 +158,7 @@ function res = simulate_scenario(p, sc, modelPath)
                     for ei = 1:numel(simOut.logsout)
                         el = simOut.logsout.get(ei);
                         if isa(el, 'Simulink.SimulationData.Signal')
-                            res.completedPatients = el.Values.Data(end);
+                            res.completedPatients = last_sample(el);
                             break;
                         end
                     end
@@ -141,16 +166,25 @@ function res = simulate_scenario(p, sc, modelPath)
             end
 
             % Compute MEASURED throughput and annual capacity
+            % Throughput is only reported for a full simulated workday: a
+            % partial window (e.g. the 1h smoke) is NOT extrapolated to a
+            % day, which would fabricate a rate the model never produced.
             if ~isnan(res.completedPatients) && p.workHoursPerDay > 0
-                res.throughput = res.completedPatients;
-                res.annualCapacity = res.throughput * 365;
+                if abs(p.simTimeMin - p.workHoursPerDay * 60) < 1e-9
+                    res.measurementWindow = 'FULL_WORKDAY';
+                    res.throughput = res.completedPatients;   % patients/workday
+                    res.annualCapacity = res.throughput * 365;
+                else
+                    res.measurementWindow = 'PARTIAL_WINDOW';
+                    res.throughput = NaN;
+                    res.annualCapacity = NaN;
+                end
             end
 
-            % Compute ANALYTICAL KPI estimates from model parameters
+            % Analytical KPI estimates from model parameters (context/labels)
             aStats = compute_analytical_stats(p);
             res.meanWaitingTime     = aStats.meanWaitingTime;
             res.maxWaitingTime      = aStats.maxWaitingTime;
-            res.queueLength         = aStats.queueLength;
             res.acqUtilization      = aStats.acqUtilization;
             res.aiUtilization       = aStats.aiUtilization;
             res.revUtilization      = aStats.revUtilization;
@@ -179,6 +213,21 @@ function res = pending_scenario(p, sc)
     res = init_result_struct(sc, p);
     res.executionStatus = 'PENDING';
     res.bottleneck      = 'PENDING';
+end
+
+% -------------------------------------------------------------------------
+% Signal extraction helper
+% -------------------------------------------------------------------------
+function v = last_sample(el)
+%LAST_SAMPLE  Last logged sample of a Simulink signal, NaN when none logged.
+%   Empty logging (e.g. no entity ever reached the completed sink) is a
+%   legitimate measured '0 completed', surfaced as NaN so the MEASURED
+%   throughput logic below treats it as "no throughput measured".
+    v = NaN;
+    td = el.Values.Data;
+    if ~isempty(td)
+        v = td(end);
+    end
 end
 
 % -------------------------------------------------------------------------
@@ -309,6 +358,12 @@ function r = init_result_struct(sc, p)
     r.bandwidthMbps       = p.bandwidthMbps;
     r.numReviewers        = p.numReviewers;
     r.patientsPerDay      = p.patientsPerDay;
+    r.simTimeHours        = p.simTimeMin / 60;
+    if abs(p.simTimeMin - p.workHoursPerDay * 60) < 1e-9
+        r.measurementWindow = 'FULL_WORKDAY';
+    else
+        r.measurementWindow = 'PARTIAL_WINDOW';
+    end
 end
 
 function r = empty_result_struct()
@@ -317,8 +372,11 @@ function r = empty_result_struct()
         'bandwidthMbps',       NaN, ...
         'numReviewers',        NaN, ...
         'patientsPerDay',      NaN, ...
+        'simTimeHours',        NaN, ...
+        'measurementWindow',   '', ...
         'throughput',          NaN, ...
         'completedPatients',   NaN, ...
+        'averageWaitingTime',  NaN, ...
         'meanWaitingTime',     NaN, ...
         'maxWaitingTime',      NaN, ...
         'queueLength',         NaN, ...
@@ -396,14 +454,20 @@ function print_kpi_report(results)
 
         if strcmp(r.executionStatus, 'SUCCESS')
             fprintf('  --- MEASURED (from simulation) ---\n');
-            fprintf('  Completed patients: %d (in %g-hour sim window)\n', ...
-                r.completedPatients, r.patientsPerDay / 274 * 8);
-            fprintf('  Throughput:         %.1f patients/day\n', r.throughput);
-            fprintf('  Annual capacity:    %.0f patients/year\n', r.annualCapacity);
+            fprintf('  Completed patients: %d (in %g-hour simulation window, %s)\n', ...
+                r.completedPatients, r.simTimeHours, r.measurementWindow);
+            if ~isnan(r.throughput)
+                fprintf('  Throughput:         %.1f patients/workday (MEASURED)\n', r.throughput);
+                fprintf('  Annual capacity:    %.0f patients/year (workday x 365)\n', r.annualCapacity);
+            else
+                fprintf('  Throughput:         not reported (partial window; no daily extrapolation)\n');
+            end
+            fprintf('  Avg wait (Acq queue): %.1f sec (MEASURED)\n', r.averageWaitingTime);
+            fprintf('  Avg queue length:     %.2f entities (MEASURED)\n', r.queueLength);
+            fprintf('  Reviewer util:        %.1f%% (MEASURED)\n', r.reviewerUtilization * 100);
             fprintf('  --- ANALYTICAL (M/M/1 estimates from params) ---\n');
             fprintf('  Mean waiting time:  %.1f sec\n', r.meanWaitingTime);
             fprintf('  Max waiting time:   %.1f sec (est.)\n', r.maxWaitingTime);
-            fprintf('  Avg queue length:   %.2f entities\n', r.queueLength);
             fprintf('  Acquisition util:   %.1f%%\n', r.acqUtilization * 100);
             fprintf('  Network util:       %.1f%%\n', r.networkUtilization * 100);
             fprintf('  AI Processing util: %.1f%%\n', r.aiUtilization * 100);
@@ -414,6 +478,111 @@ function print_kpi_report(results)
         end
     end
     fprintf('\n%s\n\n', repmat('=', 1, 80));
+end
+
+% -------------------------------------------------------------------------
+% JSON persistence (real simulation results, never fabricated)
+% -------------------------------------------------------------------------
+function outPath = persist_results_json(results)
+%PERSIST_RESULTS_JSON  Write measured + analytical scenario results to JSON.
+%
+%   Writes simulink/output/district_capacity_results_<timestamp>.json so the
+%   actual simulation outputs survive the session. Every numeric field in the
+%   file is either:
+%     MEASURED   - directly from a SimEvents simulation run
+%     ANALYTICAL - M/M/1 estimate computed from scenario_params
+%   fields that do not apply are null. NaN/Inf are never encoded as JSON
+%   numbers.
+
+    simDir = fileparts(mfilename('fullpath'));
+    outDir = fullfile(simDir, 'output');
+    if ~exist(outDir, 'dir')
+        mkdir(outDir);
+    end
+
+    ts = datestr(now, 'yyyymmdd_HHMMSS');
+    outPath = fullfile(outDir, sprintf('district_capacity_results_%s.json', ts));
+
+    payload = struct();
+    payload.generatedAt      = datestr(now, 'yyyy-mm-dd HH:MM:SS');
+    payload.matlabVersion    = version();
+    payload.simulinkVersion  = safe_ver('simulink');
+    payload.simEventsVersion = safe_ver('simevents');
+    payload.modelFile        = 'DRTelemedicine.slx';
+    payload.dataSourcePolicy = [ ...
+        'MEASURED: completedPatients from the SimEvents completed sink; ' ...
+        'throughput/annualCapacity only for a FULL_WORKDAY window; ' ...
+        'averageWaitingTime/queueLength/reviewerUtilization read directly from ' ...
+        'real SimEvents block statistics (Acquisition Queue AverageWait/' ...
+        'AverageQueueLength, Review Server Utilization) enabled POST-BUILD as ' ...
+        'passive listeners; one dedicated To Workspace per signal. ' ...
+        'ANALYTICAL: meanWaitingTime/maxWaitingTime/utilizations/ ' ...
+        'bottleneck are M/M/1 estimates from scenario_params. ' ...
+        'No value is extrapolated from a partial simulation window.']; %#ok<NBRAK>
+    payload.results = sanitize_json(results);
+
+    json = jsonencode(payload, 'PrettyPrint', true);
+    fid = fopen(outPath, 'w');
+    if fid < 0
+        fail('WriteFailed', 'Could not open %s for writing.', outPath);
+    end
+    fwrite(fid, json, 'char');
+    fclose(fid);
+
+    fprintf('\nPersisted results to %s\n', outPath);
+end
+
+function v = safe_ver(name)
+    % SimEvents' toolbox name changed to 'slde'; 'ver('simevents')' is
+    % deprecated and warns. Try non-deprecated names first.
+    candidates = {name};
+    if strcmp(name, 'simevents')
+        candidates = {'slde', 'simevents'};
+    end
+    v = '';
+    for i = 1:numel(candidates)
+        try
+            vv = ver(candidates{i});
+            if ~isempty(vv)
+                v = sprintf('%s (%s)', vv(1).Version, strtrim(vv(1).Release));
+                return;
+            end
+        catch
+            % try next candidate
+        end
+    end
+end
+
+function s = sanitize_json(x)
+%SANITIZE_JSON  Convert NaN/Inf anywhere in x to [] so jsonencode succeeds.
+%   Struct ARRAYS become cell arrays (JSON arrays of objects) to keep the
+%   element grouping unambiguous for jsonencode.
+    if isstruct(x)
+        if numel(x) > 1
+            s = cell(1, numel(x));
+            for i = 1:numel(x)
+                s{i} = sanitize_json(x(i));
+            end
+        else
+            s = struct();
+            for f = fieldnames(x).'
+                s.(f{1}) = sanitize_json(x.(f{1}));
+            end
+        end
+    elseif iscell(x)
+        s = cell(size(x));
+        for i = 1:numel(x)
+            s{i} = sanitize_json(x{i});
+        end
+    elseif isnumeric(x)
+        s = x;
+        bad = isnan(x) | isinf(x);
+        if any(bad(:))
+            s(bad) = [];
+        end
+    else
+        s = x;
+    end
 end
 
 % -------------------------------------------------------------------------

@@ -178,12 +178,24 @@ function report = buildReport(caseData, params)
     end
 
     % --- Add explainability if available ---
+    gradCamAvailable = false;
+    attentionAvailable = false;
+    evidenceOverlayAvailable = false;
     if isfield(caseData, 'explain') && isstruct(caseData.explain)
+        % Content-based availability only (AGENTS.md #3). The attention image
+        % is never advertised just because a nonempty (black/zero-map) array
+        % exists: it is available ONLY when the heatmap itself is non-trivial.
+        gradCamAvailable = isfield(caseData.explain, 'gradCam') ...
+            && ~isempty(caseData.explain.gradCam) ...
+            && any(caseData.explain.gradCam(:) > 0);
+        attentionAvailable = gradCamAvailable;   % zero map -> black image, not shown
+        evidenceOverlayAvailable = isfield(caseData, 'evidence') ...
+            && evidenceOverlayHasContent(caseData.evidence);
         reportData.explainability = struct( ...
-            'gradCamAvailable',    ~isempty(caseData.explain.gradCam) && any(caseData.explain.gradCam(:)), ...
-            'attentionImageAvailable', ~isempty(caseData.explain.attentionImage), ...
-            'evidenceOverlayAvailable', ~isempty(caseData.explain.evidenceOverlay), ...
-            'note',                caseData.explain.note);
+            'gradCamAvailable',          gradCamAvailable, ...
+            'attentionImageAvailable',   attentionAvailable, ...
+            'evidenceOverlayAvailable',  evidenceOverlayAvailable, ...
+            'note',                      caseData.explain.note);
     end
 
     % --- Human-readable summary ---
@@ -229,6 +241,27 @@ function report = buildReport(caseData, params)
         'disclaimer', 'Screening decision-support only. Not a diagnosis and not a replacement for an ophthalmologist.', ...
         'review',     review);
 
+    % --- Renderer images (visuals for the PDF, kept OUT of the machine-
+    % readable report.data subset). Attention/evidence overlays are embedded
+    % only when they contain real content (honest availability); a zero-map
+    % mock yields no fake panels. The original working image is always carried.
+    report.images = struct( ...
+        'image',           caseData.image, ...
+        'attentionImage',  [], ...
+        'evidenceOverlay', [], ...
+        'gradCam',         []);
+    if isfield(caseData, 'explain') && isstruct(caseData.explain)
+        if attentionAvailable && isfield(caseData.explain, 'attentionImage')
+            report.images.attentionImage = caseData.explain.attentionImage;
+        end
+        if evidenceOverlayAvailable && isfield(caseData.explain, 'evidenceOverlay')
+            report.images.evidenceOverlay = caseData.explain.evidenceOverlay;
+        end
+        if isfield(caseData.explain, 'gradCam')
+            report.images.gradCam = caseData.explain.gradCam;
+        end
+    end
+
     % --- Helper functions ---
     function label = gradeToLabel(grade)
         switch grade
@@ -255,6 +288,29 @@ function report = buildReport(caseData, params)
             conf = caseData.evidence.confidence;
         else
             conf = 'n/a';
+        end
+    end
+
+    function tf = evidenceOverlayHasContent(ev)
+        % The evidence overlay draws lesion-candidate maps and a DETECTED optic
+        % disc only (computeGradCAM.m). Availability is honest and mirrors what
+        % is actually drawn: no candidates + no detected disc => not available.
+        tf = false;
+        if ~isstruct(ev); return; end
+        if isfield(ev, 'lesions') && isstruct(ev.lesions)
+            classes = fieldnames(ev.lesions);
+            for i = 1:numel(classes)
+                les = ev.lesions.(classes{i});
+                if isstruct(les) && isfield(les, 'count') && les.count > 0
+                    tf = true;
+                    return;
+                end
+            end
+        end
+        if isfield(ev, 'opticDiscDetail') && isstruct(ev.opticDiscDetail) ...
+                && isfield(ev.opticDiscDetail, 'center') ...
+                && ~isempty(ev.opticDiscDetail.center)
+            tf = true;
         end
     end
 end

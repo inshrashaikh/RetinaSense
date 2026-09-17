@@ -107,7 +107,7 @@ function success = renderReportPDF(report, filepath, params)
         end
 
         % ==================== PAGE 2: Visualizations ====================
-        if isfield(report, 'data') && isfield(report.data, 'explainability')
+        if isfield(report, 'images')
             clf(fig);
             renderPage2Visualizations(fig, report);
             if exist('exportgraphics', 'file')
@@ -411,41 +411,113 @@ function renderPage1Summary(fig, report)
 end
 
 function renderPage2Visualizations(fig, report)
-%RENDERPAGE2VISUALIZATIONS  Render image visualizations page.
+%RENDERPAGE2VISUALIZATIONS  Render the image visualizations page.
+%
+%   Shows the working image, the real Grad-CAM attention overlay and the
+%   lesion/optic-disc evidence overlay (when each is available). Unavailable
+%   panels render as honest gray placeholders - no fabricated attention or
+%   evidence is ever drawn (AGENTS.md #3).
 
     d = report.data;
     clf(fig);
     hold on;
 
-    text(0.08, 0.95, 'IMAGE VISUALIZATIONS', 'FontSize', 16, 'FontWeight', 'bold');
+    rc = report_config();
+    vs = rc.visuals;
+    textColor = rc.colors.body;
+    grayColor = [0.5 0.5 0.5];
 
-    % We need the original image from the case - but we don't have it in report
-    % This is a placeholder for when the case image is available
-    % In practice, the case image would be passed or stored in report
-    
-    % Show explainability if available
-    if isfield(d, 'explainability') && d.explainability.attentionImageAvailable
-        % Grad-CAM and evidence overlay would be shown here
-        % For now, indicate availability
-        text(0.08, 0.85, 'Grad-CAM Attention: Available', 'FontSize', 11, 'Color', [0, 0.5, 0]);
-        text(0.08, 0.80, 'Evidence Overlay: Available', 'FontSize', 11, 'Color', [0, 0.5, 0]);
-        text(0.08, 0.75, 'Note: Grad-CAM represents model attention, not causality.', 'FontSize', 10, 'Color', [0.5, 0, 0]);
+    % Availability status (content-based, set by buildReport).
+    exp = struct('attentionImageAvailable', false, ...
+                 'evidenceOverlayAvailable', false, ...
+                 'note', '');
+    if isfield(d, 'explainability')
+        e = d.explainability;
+        fields = fieldnames(exp);
+        for i = 1:numel(fields)
+            if isfield(e, fields{i}); exp.(fields{i}) = e.(fields{i}); end
+        end
+    end
+
+    imgs = struct('image', [], 'attentionImage', [], 'evidenceOverlay', []);
+    if isfield(report, 'images')
+        f = fieldnames(imgs);
+        for i = 1:numel(f)
+            if isfield(report.images, f{i}); imgs.(f{i}) = report.images.(f{i}); end
+        end
+    end
+
+    % Title
+    text(0.5, vs.titleY, 'IMAGE VISUALIZATIONS', ...
+        'FontSize', 16, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', ...
+        'Color', rc.colors.title);
+
+    % Honest availability status line.
+    if exp.attentionImageAvailable && ~isempty(imgs.attentionImage)
+        attnStr = 'Grad-CAM Attention: Available';
+        attnCol = rc.colors.highlight;
     else
-        text(0.08, 0.85, 'Grad-CAM Attention: Not available (no trained model)', 'FontSize', 11, 'Color', [0.5, 0.5, 0]);
-        text(0.08, 0.80, 'Evidence Overlay: Not available', 'FontSize', 11, 'Color', [0.5, 0.5, 0]);
+        attnStr = 'Grad-CAM Attention: Not available (no model attention)';
+        attnCol = grayColor;
+    end
+    if exp.evidenceOverlayAvailable && ~isempty(imgs.evidenceOverlay)
+        evStr = 'Evidence Overlay: Available';
+        evCol = rc.colors.highlight;
+    else
+        evStr = 'Evidence Overlay: Not available (no lesion/optic-disc candidates)';
+        evCol = grayColor;
+    end
+    text(0.08, vs.statusY, attnStr, 'FontSize', 11, 'Color', attnCol);
+    text(0.46, vs.statusY, evStr, 'FontSize', 11, 'Color', evCol);
+    if ~isempty(exp.note)
+        text(0.08, vs.noteY, exp.note, 'FontSize', 10, 'Color', [0.5 0 0]);
+    end
+
+    % ---- Image panels (real content only; steady layout so a missing panel
+    % is visibly honest, never replaced with a fake one) ----
+    showOriginal  = ~isempty(imgs.image);
+    showAttention = exp.attentionImageAvailable && ~isempty(imgs.attentionImage);
+    showEvidence  = exp.evidenceOverlayAvailable && ~isempty(imgs.evidenceOverlay);
+    captions = {'Original working image', 'Grad-CAM attention', 'Evidence overlay'};
+    content  = {imgs.image, imgs.attentionImage, imgs.evidenceOverlay};
+    shown    = [showOriginal, showAttention, showEvidence];
+
+    x = vs.panelStartX;
+    for i = 1:3
+        rect = [x, vs.rowTop - vs.panelWidth, vs.panelWidth, vs.panelWidth];
+        drawVisualPanel(fig, rect, content{i}, captions{i}, shown(i), rc);
+        x = x + vs.panelWidth + vs.panelGap;
     end
 
     % Pipeline stages
-    yPos = 0.65;
-    text(0.08, yPos, 'PIPELINE STAGES EXECUTED', 'FontSize', 14, 'FontWeight', 'bold');
-    yPos = yPos - 0.04;
+    yPos = vs.rowTop - vs.panelWidth - 0.06;
+    text(0.08, yPos, 'PIPELINE STAGES EXECUTED', 'FontSize', 12, 'FontWeight', 'bold');
+    yPos = yPos - 0.035;
     for i = 1:numel(d.pipelineStages)
-        text(0.12, yPos, sprintf('%d. %s', i, d.pipelineStages{i}), 'FontSize', 11);
-        yPos = yPos - 0.035;
+        text(0.12, yPos, sprintf('%d. %s', i, d.pipelineStages{i}), 'FontSize', 10, 'Color', textColor);
+        yPos = yPos - 0.030;
     end
 
     axis off;
     hold off;
+end
+
+function drawVisualPanel(fig, rect, img, caption, available, rc)
+%DRAWVISUALPANEL  Draw one visualization panel (image or honest placeholder).
+    ax = axes(fig, 'Units', 'normalized', 'Position', rect);
+    cla(ax);
+    if available
+        image(ax, img);
+        axis(ax, 'image');
+    else
+        patch(ax, [0 1 1 0], [0 0 1 1], [0.95 0.95 0.95], ...
+            'EdgeColor', [0.6 0.6 0.6], 'LineWidth', 0.5);
+        text(ax, 0.5, 0.5, 'Not available', 'HorizontalAlignment', 'center', ...
+            'FontSize', rc.visuals.noteFontSize + 1, 'Color', [0.45 0.45 0.45]);
+    end
+    ax.XTick = [];
+    ax.YTick = [];
+    title(ax, caption, 'FontSize', rc.visuals.labelFontSize, 'FontWeight', 'bold');
 end
 
 function renderPage3Evidence(fig, report)

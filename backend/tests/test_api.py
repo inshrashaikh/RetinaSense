@@ -767,3 +767,83 @@ def test_compute_explain_rejects_degenerate_cam():
     cam[60:120, 90:140] = 0.9
     assert _has_attention_content(cam)
     assert not _has_attention_content(None)
+
+
+# ─── 28. Artifact endpoint ───────────────────────────────────────────────
+# Regression: ErrorCode.ARTIFACT_UNAVAILABLE was referenced but not defined,
+# so resolve_artifact_path raised AttributeError -> unhandled -> 500. Missing
+#/malformed/unknown artifacts must be honest 404s, never a server error.
+
+def test_artifact_missing_file_returns_404():
+    case_id = _create_case()
+    resp = client.get(f"/api/cases/{case_id}/artifacts/gradcam")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
+
+
+def test_artifact_unknown_case_returns_404_not_500():
+    # This is the P0 audit regression: was a 500 (AttributeError), never a 404.
+    resp = client.get("/api/cases/RS-2026-99999/artifacts/gradcam")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
+
+
+def test_artifact_malformed_case_id_returns_404():
+    resp = client.get("/api/cases/RS-2026-abc/artifacts/gradcam")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
+
+
+def test_artifact_unknown_name_returns_404():
+    case_id = _create_case()
+    resp = client.get(f"/api/cases/{case_id}/artifacts/gradfavicon")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ARTIFACT_UNAVAILABLE"
+
+
+def test_artifact_available_returns_png():
+    import numpy as np
+
+    from app.services import artifacts
+
+    case_id = _create_case()
+    # A real attention overlay (non-uniform, carries content) via the honest
+    # artifact write path.
+    attention = np.zeros((64, 64, 3), dtype=np.uint8)
+    attention[20:40, 20:40] = (200, 120, 30)
+    refs = artifacts.save_explain_artifacts(case_id, attention=attention, evidence=None)
+    assert refs["gradcam"] is not None
+    assert refs["evidence"] is None  # no evidence produced -> honest unavailable
+
+    resp = client.get(f"/api/cases/{case_id}/artifacts/gradcam")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("image/png")
+    assert resp.content
+
+
+# ─── 29. PDF report download ─────────────────────────────────────────────
+# Regression: the report-pdf endpoint must never 500 (reportlab present,
+# missing data yields a structured 404) and must serve a real PDF download.
+
+def test_report_pdf_after_screening():
+    case_id = _create_case()
+    _upload_image(case_id)
+
+    resp = client.get(f"/api/cases/{case_id}/report/pdf")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.content.startswith(b"%PDF")
+    assert len(resp.content) > 1000
+
+
+def test_report_pdf_without_screening_returns_404():
+    case_id = _create_case()
+    resp = client.get(f"/api/cases/{case_id}/report/pdf")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "REPORT_UNAVAILABLE"
+
+
+def test_report_pdf_unknown_case_returns_404():
+    resp = client.get("/api/cases/RS-2026-99999/report/pdf")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "CASE_NOT_FOUND"

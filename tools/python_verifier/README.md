@@ -1,6 +1,6 @@
 # Python verifier (dev-time, MATLAB-less)
 
-A dependency-free mirror of the Sprint-0 mock pipeline used to run the
+A dependency-free mirror of the mock pipeline used to run the
 end-to-end workflow and its contract checks in CI / on machines without MATLAB.
 
 - It mirrors the interface contracts (`docs/ARCHITECTURE.md §4`) and the

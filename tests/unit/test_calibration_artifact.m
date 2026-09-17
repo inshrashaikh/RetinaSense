@@ -90,9 +90,9 @@ end
 % =====================================================================
 
 function testMockPathUnchanged(testCase)
-% Default runPipeline (mock=true) keeps the config identity T=1: calibrated
-% probabilities equal the mock raw probabilities.
-    c = runPipeline('scenario', 'good');
+% Explicit mock runPipeline('mock', true) keeps the config identity T=1:
+% calibrated probabilities equal the mock raw probabilities.
+    c = runPipeline('scenario', 'good', 'mock', true);
     verifyEqual(testCase, c.grading.modelFile, '');
     verifyEqual(testCase, c.calibrated.calibratedProbs, ...
         applyCalibration(c.grading, 1.0, experiment_config().calibration).calibratedProbs, ...

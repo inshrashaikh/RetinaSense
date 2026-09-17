@@ -26,6 +26,10 @@ def _temp_data_dir(tmp_path_factory):
     cfg.CASES_DIR = cases_dir
     cfg.IMAGES_DIR = images_dir
     cfg.DATABASE_PATH = db_path
+    cfg.ARTIFACTS_DIR = tmp / "artifacts"
+    cfg.REPORTS_DIR = tmp / "reports"
+    cfg.ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    cfg.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     import app.storage.local_store as local_store
     import app.storage.database_store as database_store
     import app.utils.case_id as case_id_mod
@@ -33,6 +37,13 @@ def _temp_data_dir(tmp_path_factory):
     local_store.IMAGES_DIR = images_dir
     database_store.DATA_DIR = tmp
     case_id_mod._counter = None  # restart ID counter over the temp database
+    # artifacts/pdf_report captured the dirs by value at import time, so the
+    # redirection must be patched on those modules too.
+    import app.services.artifacts as artifacts_svc
+    import app.services.pdf_report as pdf_report_svc
+    artifacts_svc.ARTIFACTS_DIR = cfg.ARTIFACTS_DIR
+    pdf_report_svc.REPORTS_DIR = cfg.REPORTS_DIR
+    pdf_report_svc._ARTIFACTS_DIR = cfg.ARTIFACTS_DIR
 
     from app.db.session import configure_database, init_db
 

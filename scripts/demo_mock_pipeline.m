@@ -1,18 +1,18 @@
 function demo_mock_pipeline()
-%DEMO_MOCK_PIPELINE  Run the full mock pipeline end-to-end (Sprint 0 demo).
+%DEMO_MOCK_PIPELINE  Run the full mock pipeline end-to-end.
 %
 %   demo_mock_pipeline()
 %
 %   Executes the complete workflow Image -> Gate -> (Enhance) -> Analysis +
 %   Grading -> Explainability + Confidence -> Review -> Report for the three
-%   gate outcomes using synthetic images. No datasets, no trained models.
+%   gate outcomes using synthetic images through the deterministic mock path.
 %
 %   Real outputs only: whatever the mock modules deterministically produce.
 %   No clinical claims are implied.
 
     clc;
     fprintf('%s\n', repmat('=', 1, 72));
-    fprintf('RetinaSense Sprint 0 - mock end-to-end pipeline\n');
+    fprintf('RetinaSense - mock end-to-end pipeline (honest placeholder modules)\n');
     fprintf('%s\n', repmat('=', 1, 72));
 
     scenarios = {'good', 'borderline', 'ungradable'};
@@ -21,7 +21,7 @@ function demo_mock_pipeline()
         fprintf('\n>>> Scenario: %s\n', upper(sc));
 
         try
-            c = runPipeline('scenario', sc);
+            c = runPipeline('scenario', sc, 'mock', true);
             summarizeCase(c, sc);
         catch ME
             fprintf('  Pipeline FAILED for %s: %s\n', sc, ME.message);
@@ -30,9 +30,10 @@ function demo_mock_pipeline()
 
     % A second pass: human override exercise on a good case.
     fprintf('\n>>> Human review override exercise\n');
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     c = runPipeline('reviewer', struct('action','override','graderId','OPH-01', ...
-        'overrideGrade', 3, 'notes', 'CADx found microaneurysms not flagged.'));
+        'overrideGrade', 3, 'notes', 'CADx found microaneurysms not flagged.'), ...
+        'mock', true);
     fprintf('  override recorded: grade=%d -> finalReferral=%d (status=%s)\n', ...
         c.review.overrideGrade, c.review.finalReferral, c.review.status);
 

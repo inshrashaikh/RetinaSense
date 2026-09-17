@@ -4,7 +4,7 @@ function tests = test_pipeline
 end
 
 function test_goodCaseRunsEndToEnd(testCase)
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     verifyEqual(testCase, c.quality.class, 'good');
     verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'grading')));
     verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'calibration')));
@@ -16,7 +16,7 @@ function test_goodCaseRunsEndToEnd(testCase)
 end
 
 function test_ungradableExitsAtGate(testCase)
-    c = runPipeline('scenario', 'ungradable');
+    c = runPipeline('scenario', 'ungradable', 'mock', true);
     verifyEqual(testCase, c.quality.class, 'ungradable');
     verifyEqual(testCase, c.pipeline.exitStage, 'qualityGate');
     verifyTrue(testCase, ~any(strcmp(c.pipeline.stages, 'grading')));
@@ -24,10 +24,11 @@ function test_ungradableExitsAtGate(testCase)
 end
 
 function test_borderlineRunsEnhancementThenProceeds(testCase)
-    c = runPipeline('scenario', 'borderline');
-    % The borderline branch is taken. On success c.quality is REPLACED by the
-    % post-enhancement recheck ('good') and the pipeline runs to the report;
-    % on failure the pipeline exits at the post-enhancement recheck.
+    c = runPipeline('scenario', 'borderline', 'mock', true);
+    % The borderline branch is taken. On success the case keeps its gate
+    % routing class ('borderline') while the post-enhancement recheck outcome
+    % is recorded in c.enhancement; the pipeline then runs to the report. On
+    % failure the pipeline exits at the post-enhancement recheck.
     if c.pipeline.enhanced
         verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'enhancement')));
         verifyTrue(testCase, any(strcmp(c.pipeline.stages, 'grading')));
@@ -38,7 +39,7 @@ function test_borderlineRunsEnhancementThenProceeds(testCase)
 end
 
 function test_reviewerOverridePropagates(testCase)
-    c = runPipeline('scenario', 'good', ...
+    c = runPipeline('scenario', 'good', 'mock', true, ...
         struct('action','override','graderId','OPH-9','overrideGrade',3,'notes','x'));
     verifyEqual(testCase, c.review.status, 'overridden');
     verifyEqual(testCase, c.review.overrideGrade, 3);
@@ -47,11 +48,11 @@ function test_reviewerOverridePropagates(testCase)
 end
 
 function test_caseContinueMode(testCase)
-    c0 = runPipeline('scenario', 'good');
+    c0 = runPipeline('scenario', 'good', 'mock', true);
     verifyTrue(testCase, ~isempty(c0.image));
     % continue-mode: feed the prior case back in; pipeline re-runs on the
     % same working image and completes.
-    c1 = runPipeline(c0);
+    c1 = runPipeline(c0, 'mock', true);
     verifyTrue(testCase, ~isempty(c1.image));
     verifyTrue(testCase, any(strcmp(c1.pipeline.stages, 'report')));
 end

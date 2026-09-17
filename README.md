@@ -10,8 +10,13 @@ for the final referral decision — with a parallel Simulink district-scale
 capacity model. Detailed design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 and the PRD.
 
-> Status: **Sprint 0 — repo skeleton + mock pipeline.** No ML models yet.
-> The pipeline runs on synthetic images with honest placeholder modules.
+> Status: **The real trained DR model is the screening default.** ResNet-50
+> fine-tuned on APTOS 2019 plus temperature calibration (`data/models/`) is
+> loaded by `scripts/runPipeline.m` unless mock is explicitly requested
+> (`'mock', true` / `RETINASENSE_SIMULATION=mock`, tests/demo only). The
+> honest benchmark record (`data/models/backbone_benchmark.json`) shows the
+> clinical acceptance targets are **not yet met**, so no performance claim is
+> made.
 
 ---
 
@@ -25,8 +30,10 @@ and the PRD.
   (temperature scaling, uncertainty routing → mandatory human review).
 - **Human-in-the-loop**: the final call is the ophthalmologist's
   (approve / override / recapture).
-- **Proof of capacity**: the Simulink/SimEvents model checks whether a
-  district node can serve ~100,000 patients/year (~274/day).
+- **Proof of capacity**: the Simulink/SimEvents model (with `simulink/`)
+  checks — from measured full-workday simulation output, persisted to
+  `simulink/output/*.json` — whether a district node can serve
+  ~100,000 patients/year (~274/day). See `simulink/README.md`.
 
 ## 2. Architecture (short version)
 
@@ -45,10 +52,10 @@ Everything flows through a single shared **`Case` struct** (see
 (`docs/ARCHITECTURE.md §4`) with explicit input, output, error, and config.
 `scripts/runPipeline.m` wires them in order.
 
-## 3. How to run the mock pipeline (Sprint 0)
+## 3. How to run the mock pipeline
 
-No datasets, no trained models, no toolboxes beyond base MATLAB + Image
-Processing. Everything is synthetic and deterministic.
+These mock scenarios need no datasets and no trained model — everything is
+synthetic and deterministic.
 
 ```matlab
 % add the repo root + folders to the path (path shown is an example;
@@ -110,7 +117,7 @@ RetinaSense/
 ├─ preprocessing/         Stages 0-4: ingest, assessQuality, recapture,
 │                         enhanceImage, recheckQuality
 ├─ analysis/              Stage 5 advisory: vessels/disc/fovea/lesions
-├─ classification/        Stage 6: classifyImage (mock) + training TODO stubs
+├─ classification/        Stage 6: classifyImage (real path + honest mock fallback)
 ├─ explainability/        Stage 7: computeGradCAM (attention, honest)
 ├─ calibration/           Stage 8: fitTemperature + applyCalibration (entropy)
 ├─ reporting/             Stage 9: submitReview, buildReport, renderReport
@@ -146,8 +153,9 @@ signature from `docs/ARCHITECTURE.md §4`, (b) reads/writes only `Case` fields,
 (c) reads its config from `config/`, (d) uses `core/raiseError.m` with a
 `RetinaSense:<module>:<code>` identifier, (e) is your folder's clear boundary.
 
-**To replace a placeholder with real ML:** keep the function name + I/O and the
-`Case` fields identical, then flip it to real code. Keep it honest:
+**To build the real ML pipeline behind a stable contract:** keep the function
+name + I/O and the `Case` fields identical, then replace each honest stub's
+algorithm with the real one. Keep it honest:
 - Replace `mockGrading` in `classifyImage` after `trainClassifier` +
   `benchmark_backbones` choose the backbone.
 - Replace `computeGradCAM`'s zero map with `gradCAM(...)` (Sprint 4).
@@ -164,7 +172,7 @@ for external validation only.
 | Need | Requirement |
 |---|---|
 | Base runtime | MATLAB R2018b+ (uses `functiontests`, `genpath`, string functions) |
-| Sprint 0 mock | Image Processing Toolbox (im2uint8, rgb2gray, adapthisteq, imadjust, imgaussfilt, imresize) |
+| Mock fallback | Image Processing Toolbox (im2uint8, rgb2gray, adapthisteq, imadjust, imgaussfilt, imresize) |
 | Sprint 2+ grading | Deep Learning Toolbox + a pretrained backbone (resnet50 / efficientnetb0) |
 | Sprint 3 calibration | Statistics and Machine Learning Toolbox (fminsearch) |
 | Sprint 5 UI | MATLAB App Designer (review UI also runs as a programmatic `uifigure` reference; see `ui/README.md`) |

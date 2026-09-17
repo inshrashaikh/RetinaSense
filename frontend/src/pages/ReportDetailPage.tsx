@@ -26,7 +26,7 @@ import { Card, CardBody, CardHeader, Row } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingBlock } from '../components/ui/Skeleton';
 import { navigate } from '../router';
-import { friendlyError } from '../utils/errors';
+import { friendlyError, type FriendlyError } from '../utils/errors';
 import { formatPercent, statusLabel, statusTone } from '../utils/format';
 
 type FetchState = 'loading' | 'done' | 'error';
@@ -50,16 +50,19 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
   const [pdfState, setPdfState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [pdfError, setPdfError] = useState<FriendlyError | null>(null);
 
   async function downloadPdf() {
     setPdfState('loading');
+    setPdfError(null);
     try {
       const blob = await fetchReportPdf(caseId);
       downloadBlob(blob, `RetinaSense-report-${caseId}.pdf`);
       setPdfState('idle');
     } catch (err) {
-      const f = friendlyError(err);
-      setError(f);
+      // The PDF failure is surfaced wherever the page is — an error here is a
+      // real download problem, never silently swallowed.
+      setPdfError(friendlyError(err));
       setPdfState('error');
     }
   }
@@ -180,6 +183,22 @@ export function ReportDetailPage({ caseId }: { caseId: string }) {
         >
           {error.detail} Nothing is displayed in place of a report; the sections below are the
           stored case record itself.
+        </Alert>
+      )}
+
+      {pdfState === 'error' && pdfError && (
+        <Alert
+          variant="error"
+          icon="alert"
+          title={pdfError.title}
+          role="alert"
+          action={
+            <Button size="sm" icon="refresh" onClick={() => void downloadPdf()}>
+              Try PDF download again
+            </Button>
+          }
+        >
+          {pdfError.detail}
         </Alert>
       )}
 

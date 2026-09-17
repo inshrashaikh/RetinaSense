@@ -65,7 +65,10 @@ function quality = assessQuality(working, params)
 
     % TODO(Sprint 1): calibrate thresholds/weights against a small human-rated
     % quality subset; add reported false-rejection rate (docs/ARCHITECTURE.md §2
-    % Stage 1 metric).
+    % Stage 1 metric). Harness ready: scripts/calibrate_quality_gate.m + config/
+    % quality_calibration.m. Until a labeled subset exists in data/manifests/
+    % quality_labels.csv the committed quality_thresholds() defaults stand and
+    % this gate stays honest (AGENTS.md #1/#3).
 end
 
 function [score, klass, failures] = classify(params, metrics)

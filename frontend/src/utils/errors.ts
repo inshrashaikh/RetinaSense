@@ -50,6 +50,12 @@ const CODE_MESSAGES: Record<string, FriendlyError> = {
     title: 'Image not available',
     detail: 'No fundus image is stored for this case on the backend.',
   },
+  ARTIFACT_UNAVAILABLE: {
+    title: 'Artifact not available',
+    detail:
+      'The backend has no Grad-CAM attention or evidence artifact stored for this case. ' +
+      'Attention is never drawn or invented here.',
+  },
   INTERNAL_ERROR: {
     title: 'Backend error',
     detail: 'The backend reported an internal error. Please try again.',
@@ -92,4 +98,14 @@ export function isEngineUnavailable(e: unknown): boolean {
 
 export function isRecaptureError(e: unknown): boolean {
   return isApiError(e) && e.code === 'UNGRADABLE_IMAGE';
+}
+
+/**
+ * True when the backend honestly reports that no artifact exists (404).
+ * This is DIFFERENT from a network/API failure: 404 means "the pipeline did
+ * not produce one", while a network error or 5xx means "something went wrong
+ * retrieving it". Callers must not collapse the two states.
+ */
+export function isArtifactUnavailable(e: unknown): boolean {
+  return isApiError(e) && e.code === 'ARTIFACT_UNAVAILABLE';
 }

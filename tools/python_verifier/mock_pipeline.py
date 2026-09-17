@@ -1,10 +1,10 @@
 """
-RetinaSense Sprint 0 — pipeline verification harness (no MATLAB required).
+RetinaSense mock pipeline verification harness (no MATLAB required).
 
 This is a *dev-time* mirror of the MATLAB mock pipeline, used to execute the
 end-to-end workflow and its contract tests on machines without MATLAB. It is
 NOT product code and NOT a replacement for the MATLAB modules in
-preprocessing/, classification/, etc. It mirrors only the Sprint-0 mock
+preprocessing/, classification/, etc. It mirrors only the mock
 semantics so CI can verify integration integrity:
 
     runPipeline(scenario) -> case
@@ -17,6 +17,10 @@ Mirrored contracts (docs/ARCHITECTURE.md §4):
     review: action, graderId, overrideGrade, finalReferral, status, notes
 
 Run:  python mock_pipeline.py
+
+Mock is an explicit opt-in, mirroring runPipeline.m: run_pipeline() now
+defaults to mock_enabled=False (real screening); the labelled mock path runs
+only when mock_enabled=True is passed by the checks below.
 """
 
 import math
@@ -167,11 +171,11 @@ class QualityGate:
 
 
 # ---------------------------------------------------------------------------
-# Advisory analysis (honest empty in Sprint 0)
+# Advisory analysis (honest empty without a trained model)
 # ---------------------------------------------------------------------------
 def analyze_retina(img, fov_mask=None):
     # fov_mask optional (mirrors locateOpticDisc/segmentVessels/detectLesions
-    # accepting a caller-provided FOV mask); the Sprint 0 mock returns the same
+    # accepting a caller-provided FOV mask); the mock returns the same
     # honest-empty evidence either way.
     n = len(img)
     return {"vesselMask": [[False] * n for _ in range(n)],
@@ -255,9 +259,11 @@ def build_report(case):
 # Orchestrator mirror (scripts/runPipeline.m)
 # ---------------------------------------------------------------------------
 def run_pipeline(scenario="good", meta=None, image_path="", reviewer_input=None,
-                 mock_enabled=True, write_report=False):
+                 mock_enabled=False, write_report=False):
+    # Mirrors runPipeline.m: screening is real by default; the labelled mock
+    # path runs only when explicitly requested (mock_enabled=True).
     if not mock_enabled:
-        raise RuntimeError("MissingModel: no trained model present")
+        raise RuntimeError("MissingModel: no trained model selected")
 
     c = new_case()
     c["meta"] = meta or {"patientId": "demo001", "eye": "right",
@@ -392,7 +398,7 @@ def run_checks():
     # orchestration end-to-end
     seen = {}
     for sc in ("good", "borderline", "ungradable"):
-        c = run_pipeline(sc, write_report=True)
+        c = run_pipeline(sc, mock_enabled=True, write_report=True)
         seen[sc] = c
         check(c["quality"]["class"] in ("good", "borderline", "ungradable"),
               f"{sc}: quality valid")
@@ -414,7 +420,8 @@ def run_checks():
           "good: auto finalReferral matches grade vs refer threshold")
 
     over = run_pipeline("good", reviewer_input={"action": "override", "graderId": "OPH-01",
-                                                "overrideGrade": 3, "notes": "found MAs"})
+                                                "overrideGrade": 3, "notes": "found MAs"},
+                        mock_enabled=True)
     check(over["review"]["status"] == "overridden", "override: status overridden")
     check(over["review"]["finalReferral"] is True, "override grade 3 >= 2 -> referral True")
     check(over["report"]["review"]["finalReferral"] is True, "override propagates to report")
@@ -424,7 +431,7 @@ def run_checks():
 
 def main():
     print("=" * 64)
-    print("RetinaSense Sprint 0 - Python verification harness")
+    print("RetinaSense mock pipeline - Python verification harness")
     print("Mirrors the MATLAB mock pipeline (tools/python_verifier)")
     print("=" * 64)
     fails = run_checks()

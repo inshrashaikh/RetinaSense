@@ -34,13 +34,13 @@ PASSWORD = "doctor123"
 # several until the REAL quality gate ACCEPTS one (gradable). Every decision
 # below comes from the live engine — if the gate honestly rejects an image,
 # we record the rejection and move to the next candidate. Nothing is forced.
-TESTING = Path(r"D:\Project\RetinaSense\data\raw\IDRiD\C. Localization\C. Localization\1. Original Images\b. Testing Set")
-TRAINING = Path(r"D:\Project\RetinaSense\data\raw\IDRiD\C. Localization\C. Localization\1. Original Images\a. Training Set")
+TESTING = Path(r"D:\Projects\RetinaSense\data\raw\IDRiD\C. Localization\C. Localization\1. Original Images\b. Testing Set")
+TRAINING = Path(r"D:\Projects\RetinaSense\data\raw\IDRiD\C. Localization\C. Localization\1. Original Images\a. Training Set")
 
 # Real APTOS 2019 fundus PNGs — grade folders 0..4 with REAL referable
 # severities. These are the exact images resnet50_dr_aptos.pt was trained on,
 # so a real accepted APTOS image exercises the ENTIRE engine chain honestly.
-APTOS = Path(r"D:\Project\RetinaSense\data\raw\aptos\images")
+APTOS = Path(r"D:\Projects\RetinaSense\data\raw\aptos\images")
 
 CANDIDATES = [
     TESTING / "IDRiD_001.jpg",

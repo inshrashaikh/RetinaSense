@@ -10,15 +10,15 @@ This document does NOT change any architecture, contracts, folder structure, or 
 ## Principles
 
 1. The existing Sprint numbers describe **development tasks**, not chronological dependencies.
-2. All 3 members work **in parallel** after Sprint 0 foundation is frozen.
+2. All 3 members work **in parallel** after the shared foundation is frozen.
 3. Each member develops against the **shared `Case` struct** (`core/newCase.m`) and the **interface contracts** in `docs/ARCHITECTURE.md §4`.
 4. Mocks/placeholders enable independent testing; real implementations swap in behind identical interfaces.
 
 ---
 
-## Sprint 0 — Shared Foundation (all members, ~first 2 hours)
+## Shared Foundation (all members, done)
 
-Sprint 0 is NOT a blocking dependency for members 2 or 3. It establishes the skeleton that all members develop against.
+The shared foundation is NOT a blocking dependency for members 2 or 3. It establishes the skeleton that all members develop against.
 
 | Task | Owner | Status |
 |------|-------|--------|
@@ -29,7 +29,7 @@ Sprint 0 is NOT a blocking dependency for members 2 or 3. It establishes the ske
 | `docs/ARCHITECTURE.md` — contracts §4 | All (freeze) | Done |
 | `AGENTS.md` — conventions | All (freeze) | Done |
 
-**After Sprint 0 freeze:** each member touches ONLY their owned folders. `core/`, `config/`, `scripts/runPipeline.m`, `tests/` may receive test additions but NOT structural changes without group agreement.
+**After the foundation freeze:** each member touches ONLY their owned folders. `core/`, `config/`, `scripts/runPipeline.m`, `tests/` may receive test additions but NOT structural changes without group agreement.
 
 ---
 
@@ -170,9 +170,14 @@ SimEvents discrete-event simulation of the district-scale telemedicine workflow.
 
 ### Owned Folders & Files
 
-| Folder | Files | Status |
-|--------|-------|--------|
-| `simulink/` | `DRTelemedicine.slx`, `run_simulink_scenarios.m`, `analyze_capacity.m`, `scenario_params.m` | Stubs → full SimEvents model |
+| Folders | Files | Status |
+|---------|-------|--------|
+| `simulink/` | `DRTelemedicine.slx`, `scenario_params.m`, `run_simulink_scenarios.m`, `analyze_capacity.m`, `smoke_DRTelemedicine.m`, `build_DRTelemedicine.m` | **Complete** — full SimEvents model checked in and runnable; results persisted to `simulink/output/*.json` |
+
+> **Member 3 note (completed):** `DRTelemedicine.slx` is committed and executes.
+> `smoke_DRTelemedicine()` enforces `completedPatients > 0`, and the 100k/yr
+> verdict in `analyze_capacity` is made from measured full-workday simulation,
+> never an assumption. See `simulink/README.md` and `docs/AUDIT.md`.
 
 ### Sprint Mapping
 
@@ -216,11 +221,13 @@ Member 3 can start immediately with no dependency on any other member:
 
 **Key test:**
 ```matlab
-% After building DRTelemedicine.slx:
-run_simulink_scenarios();    % should produce scenario table
-analyze_capacity();          % should report bottleneck + required resources
-% Check: 100,000 patients/yr achievable in at least one scenario
+smoke_DRTelemedicine();      % load/compile/smoke-run; FAILS if completedPatients <= 0
+run_simulink_scenarios();    % produce scenario table + persist simulink/output/*.json
+analyze_capacity();          % report measured bottleneck + required resources
+% Check: 100,000 patients/yr achievable in at least one scenario (measured)
 ```
+The 100k/yr check must be answered from **measured full-workday** simulation
+output only — see `simulink/README.md` for the results recorded so far.
 
 ### What Member 3 Should NOT Touch
 
@@ -245,19 +252,19 @@ analyze_capacity();          % should report bottleneck + required resources
 ```
          Hour 0-2          Hour 2-8          Hour 8-16
          ┌──────────┐      ┌──────────────┐  ┌──────────────┐
-Member 1:│ Sprint 0  │─────▶│ Sprint 1+2   │─▶│ Sprint 3+4   │──▶ Sprint 8 (validation)
+Member 1:│ Foundation│─────▶│ Sprint 1+2   │─▶│ Sprint 3+4   │──▶ Sprint 8 (validation)
          │ (freeze)  │      │ quality+train │  │ calib+GradCAM│
          └──────────┘      └──────────────┘  └──────────────┘
 
          Hour 0-2          Hour 2-8          Hour 8-16
          ┌──────────┐      ┌──────────────┐  ┌──────────────┐
-Member 2:│ Sprint 0  │─────▶│ Sprint 5     │─▶│ Sprint 7     │──▶ Integration
+Member 2:│ Foundation│─────▶│ Sprint 5     │─▶│ Sprint 7     │──▶ Integration
          │ (read)    │      │ report+UI    │  │ analysis     │
          └──────────┘      └──────────────┘  └──────────────┘
 
          Hour 0-2          Hour 2-12         Hour 12-16
          ┌──────────┐      ┌──────────────┐  ┌──────────────┐
-Member 3:│ Sprint 0  │─────▶│ Sprint 6     │─▶│ Scenarios +  │──▶ Integration
+Member 3:│ Foundation│─────▶│ Sprint 6     │─▶│ Scenarios +  │──▶ Integration
          │ (read)    │      │ build model  │  │ bottleneck   │
          └──────────┘      └──────────────┘  └──────────────┘
 ```
@@ -305,5 +312,5 @@ Member 3:│ Sprint 0  │─────▶│ Sprint 6     │─▶│ Scenar
 4. **Analysis is non-blocking.** `analysis/` failure never changes grading/referral behavior.
 5. **Messidor-2 is external-only.** Never in train/val splits.
 6. **Config-driven thresholds.** No magic numbers in module code.
-7. **Honest placeholders.** Sprint 0 stubs return empty/zero outputs with notes — never fake data.
+7. **Honest placeholders.** Placeholder modules return empty/zero outputs with notes — never fake data.
 8. **TODO markers stay precise.** `TODO(Sprint N): <specific task>` — remove only when real implementation lands.

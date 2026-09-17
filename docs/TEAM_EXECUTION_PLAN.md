@@ -19,8 +19,8 @@ calibration design, or explainability design.
    - Member 3 → **Sprint 6**
    - Member 4 → **Sprint 5**
    - **Sprint 9** = final polish/integration (all members).
-   - **Sprint 0** = shared foundation/contract freeze (already done).
-2. All 4 members work **in parallel** after the Sprint 0 freeze.
+   - Shared foundation/contract freeze (already done).
+2. All 4 members work **in parallel** after the foundation freeze.
 3. Each member develops against the shared `Case` struct (`core/newCase.m`) and
    §4 contracts. **Intra-implementation dependencies between members: NONE.**
 4. Mocks/placeholders (`core/newCase.m` populated with realistic fields) enable
@@ -195,7 +195,7 @@ and the §4 contracts; no `runPipeline.m` structural change required.
 ## 2-Day Parallel Execution Timeline
 
 ```
-        Sprint 0 (frozen)       Day 1                          Day 2
+        Shared foundation        Day 1                          Day 2
 Member 1 [contract read] → S1 IQA → S2 classifier+benchmark → S3 calib → S4 Grad-CAM → S8 validate+ablate+Messidor-2
 Member 2 [contract read] → S7 vessels/disc/fovea → S7 lesion candidates → evidence, synthetic+assets testing
 Member 3 [contract read] → S6 build SimEvents model → scenarios 1/2/4 Mbps × 1/2/5 reviewers → bottleneck + 100k/yr check

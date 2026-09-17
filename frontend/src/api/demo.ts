@@ -273,14 +273,7 @@ function labelFor(grade: number): string {
   return map[grade] ?? 'Unknown';
 }
 
-export async function fetchReport(caseId: string): Promise<ReportResponse> {
-  await delay();
-  // Requesting a report triggers (demo) generation, mirroring the real
-  // generate-then-read flow.
-  return buildReportResponse(caseId);
-}
-
-function buildReportResponse(caseId: string): ReportResponse {
+export function buildReportResponse(caseId: string): ReportResponse {
   const c = readStore()[caseId];
   if (!c) {
     throw { kind: 'http', code: 'CASE_NOT_FOUND', message: `Case '${caseId}' not found.`, httpStatus: 404 };

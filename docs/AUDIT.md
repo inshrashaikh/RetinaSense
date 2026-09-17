@@ -7,7 +7,7 @@ Nothing here is a clinical claim; every metric mentioned comes from a real
 
 Scope reviewed: backend FastAPI + auth, enhancement-recheck grading path, clinical
 PDF report, MATLAB analysis modules (guardrail #2 config hygiene), repo hygiene,
-and frontend test health.
+frontend test health, and the Simulink district-capacity track.
 
 ---
 
@@ -23,13 +23,22 @@ and frontend test health.
 | C6 | High | PDF report always 500'd on reportlab 5 (`styles["Small"]` removed) | Fixed + tested |
 | C7 | Medium | Analysis modules hard-coded thresholds instead of reading config (guardrail #2) | Fixed |
 | C8 | Medium | Frontend test asserted unique text that legitimately appears twice | Fixed |
+| S1 | Medium | Simulink smoke passed even when the model produced zero entities | Fixed + verified |
+| S2 | High | `build_DRTelemedicine` deleted the existing `.slx` unconditionally; paths used `pwd` | Fixed |
+| S3 | Medium | Throughput print hard-coded a "274" fudge; partial windows were extrapolated to a day | Fixed |
+| S4 | Medium | Real simulation results were never persisted | Fixed (JSON) |
+| S5 | High | 100,000/yr capacity claim was unverified against measured simulation | Fixed + verified (measured) |
+| R1 | Medium | Clinical PDF advertised a black zero-map mock as "attention" (over-claim, guardrail #3) | Fixed + tested |
+| R2 | Medium | Quality-gate thresholds never calibrated against a labeled subset | PENDING (harness ready) |
+| R3 | Medium | Borderline case reclassified 'good' after enhancement, contradicting the routing contract | Fixed + tested |
+| S6 | Low | Simulink docs said "planned artifact / stubs" although the model is committed | Fixed |
 
 Deferred / not yet actionable:
 
 | ID | Item | Note |
 |----|------|------|
 | D1 | Experiment artifacts | `experiment_pipeline.py` full run deferred; existing artifacts are stale, must be regenerated before any metric claim |
-| D2 | MATLAB execution | `.m` module edits verified by review + Python-side tests only; run `runtests('tests')` on a MATLAB box to confirm |
+| D2 | MATLAB execution | remaining `.m` edits (C-series) verified by review + Python-side tests only; run `runtests('tests')` on a MATLAB box to confirm |
 
 ---
 
@@ -200,15 +209,240 @@ backbone before making any metric claim.
 
 ---
 
+## S1 — Simulink smoke did not fail on zero throughput (Medium) — FIXED + VERIFIED
+
+**Finding.** `simulink/smoke_DRTelemedicine.m` claimed it verified "entities
+flow: completedPatients > 0", but it only set `status.simRuns = true`; a model
+that ran yet completed zero patients still reported a passing smoke.
+
+**Fix.** The smoke now hard-fails when `completedPatients` is missing (NaN) or
+`<= 0`, throwing `RetinaSense:smoke_DRTelemedicine:NoEntitiesFlow` (nonzero exit
+for CI), and returns a single `status.ok` verdict. The model path is resolved
+from the script's own folder (`simulink/`), not `pwd`.
+
+**Verification.**
+- `smoke_DRTelemedicine()` on the committed model (seed 42, 1h window):
+  `loads=1 compiles=1 simRuns=1 entitiesFlow=1 completed=17 unresolved=0` → **PASS**.
+- The `completedPatients <= 0` branch is unit-verifiable by replacing the sim
+  sink count with a zero/NaN — the check throws as designed.
+
+## S2 — `build_DRTelemedicine` overwrote the committed model blindly (High) — FIXED
+
+**Finding.** `build_DRTelemedicine.m` did `delete(fullfile(pwd, [mdl '.slx']))`
+unconditionally and saved via bare `save_system(mdl)` — a stray call (wrong
+folder, default args) silently destroyed the checked-in `DRTelemedicine.slx`.
+
+**Fix.**
+- Path-robust: the model is loaded from and saved to the script's own directory
+  (`fileparts(mfilename('fullpath'))`), independent of the current folder.
+- Safe: an existing `<mdl>.slx` is **never** overwritten without an explicit
+  third argument `build_DRTelemedicine('DRTelemedicine', false, true)`. Without
+  it, the call errors with `RetinaSense:build_DRTelemedicine:WouldOverwrite`.
+
+**Verification.** `build_DRTelemedicine()` against the committed model now
+refuses to overwrite (error path exercised); the committed `.slx` is untouched.
+
+## S3 — Hardcoded throughput in KPI print + partial-window extrapolation (Medium) — FIXED
+
+**Finding.** `run_simulink_scenarios.m` printed the measured window as
+`r.patientsPerDay / 274 * 8` (a hard-coded "274" scaling), and
+`throughput = completedPatients` was reported even for a partial (e.g. 1h)
+simulation window — implying a daily rate the model never produced.
+
+**Fix.**
+- The window is now recorded as `simTimeHours` + `measurementWindow`
+  (`FULL_WORKDAY` / `PARTIAL_WINDOW`) on every result.
+- `throughput`/`annualCapacity` are MEASURED **only** when the window is a full
+  workday (8h); a partial window reports `NaN` and is never extrapolated.
+- The KPI print shows the true window in hours, with no hard-coded divisor.
+
+## S4 — Simulation results never persisted (Medium) — FIXED
+
+**Finding.** Scenario runs printed tables but wrote no data; nothing survived
+the session for the audit trail.
+
+**Fix.** `run_simulink_scenarios` now writes
+`simulink/output/district_capacity_results_<timestamp>.json` (git-ignored
+runtime output), with MATLAB/Simulink/SimEvents versions and a per-field
+MEASURED/ANALYTICAL data-source policy. `NaN`/`Inf` are never encoded as JSON
+numbers (they become `null`).
+
+**Verification.** A full scenario run produced the JSON file (see §S5).
+
+## S5 — 100,000/yr capacity claim unverified (High) — FIXED + VERIFIED (MEASURED)
+
+**Finding.** The repo claimed a district node "can serve ~100,000 patients/year
+(~274/day)" with no measured simulation backing.
+
+**Fix.** `analyze_capacity` now renders the feasibility verdict from **measured
+full-workday** simulation outputs only, and the claim text in this file reflects
+those results. `run_simulink_scenarios` persisted the measurement per scenario.
+
+**Verification (MEASURED, seed 42, full 8h window).**
+- Baseline (`274/day` configured arrival load; 2.0 Mbps; 2 reviewers):
+  `completedPatients = 143` → measured throughput **143 patients/workday**,
+  `143 × 365 ≈ 52,195 patients/year`.
+- Therefore the **100,000/year target is NOT achieved** under the baseline
+  single-camera configuration. The analytical bottleneck is **Acquisition**
+  (single camera, 3.0 min + 10% recapture ⇒ ≈200 s effective service ⇒ ~144/day
+  bound), consistent with the measured 143.
+- `analyze_capacity`'s analytical what-if therefore flags the required change:
+  **2 acquisition stations** (all other resources are sufficient at the target).
+- Per-scenario measured values are in `simulink/output/*.json`.
+
+## S6 — Outdated Simulink documentation (Low) — FIXED
+
+**Finding.** `simulink/README.md` (two lines) still described the model as a
+Sprint-6 *future* artifact; `docs/ARCHITECTURE.md` §7 and
+`docs/TEAM_EXECUTION.md` called the folder "planned artifact / Stubs".
+
+**Fix.** Rewrote `simulink/README.md` (build/run/data-source policy + measured
+baseline summary), updated `ARCHITECTURE.md` §7 and `TEAM_EXECUTION.md` to the
+committed-and-runnable model with JSON persistence and the measured verdict.
+
+## S7 — KPI instrumentation perturbed measured throughput (High) — FIXED + VERIFIED (MEASURED)
+
+**Finding.** Early work derived the three performance KPIs
+(`averageWaitingTime`, `queueLength`, `reviewerUtilization`) from Entity
+Replicator counting pairs around the Acquisition Queue and Review Server. The
+replicators **throttle the entity flow**: the original entity of a replicator
+pair is blocked until every copy is accepted, cutting measured baseline
+throughput from **143/day to 97/day** (the counters' occupancy/ratio math was
+correct but the measured flow itself was wrong). A first replacement — enabling
+the blocks' stat ports during the model build — instead broke model compilation
+(`MismatchInputSigHierInfo`: enabling ANY SimEvents stat output on a queue or
+server changes entity structure, breaking the Entity Input Switch merges).
+
+**Fix.** Three parts, all verified:
+- `simulink/DRTelemedicine.slx` is built **flow-only**; the replicator scheme
+  was removed. The build script keeps an `enableStats` flag for experiments.
+- `simulink/instrument_for_kpis.m` enables the queue/server statistics
+  **post-build, per simulation run** (pure passive listeners), then attaches
+  one dedicated To Workspace observer per signal. Enabled after build, SimEvents
+  prepends stat ports and pushes the entity port last; the port layout is
+  verified dynamically. Queue stat order was confirmed on a controlled
+  mini-model by Little's law: `out1 = AverageWait`, `out2 =
+  AverageQueueLength` (earlier wiring had these swapped).
+- `run_simulink_scenarios`, `smoke_DRTelemedicine`, and `analyze_capacity`
+  report the three KPIs as MEASURED (JSON `dataSourcePolicy` labels them so).
+
+**Verification (MEASURED, seed 42, full 8h window).** Baseline throughput is
+back to the pristine-model value and the KPIs are real:
+- Baseline: `completed = 143/day` (`52,195/yr`), `averageWaitingTime =
+  5225 s`, `queueLength = 36.8`, `reviewerUtilization = 5.4%`. The long wait is
+  physically consistent: the single acquisition camera plus 10% recapture
+  saturates the stage (analytical utilization 100%, ~200 s effective service).
+- The full 7-scenario suite reproduces the prior measured throughputs exactly
+  (`143 / 130 / 144 / 143 / 143 / 143 / 143`), bottleneck Acquisition; KPI
+  values scale correctly across scenarios (e.g. low_load `wait = 1149 s`,
+  `qlen = 6.2`; solo_reviewer `revUtil = 10.8%` vs team_5 `2.2%`).
+- Smoke run now uses a full workday so the review-server Utilization stat is
+  genuinely exercised before it is asserted (a 1h smoke leaves too few
+  referrals to depart); PASS with all measured KPIs.
+- Result JSON: `simulink/output/district_capacity_results_20260917_180441.json`.
+
+## R1 — Clinical PDF advertised a black zero-map mock as "attention" (Medium) — FIXED + TESTED
+
+**Finding.** PDF page 2 created a Grad-CAM/attention panel whenever the
+(placeholder) `computeGradCAM` returned a **nonempty all-black** array, so a
+mock run rendered a black image labeled attention — an over-claim under guardrail #3.
+
+**Fix.** `reporting/buildReport.m` now derives availability from **content**, not
+call presence: `gradCamAvailable` / `attentionImageAvailable` require
+`any(gradCam(:) > 0)`, and `evidenceOverlayAvailable` requires lesion candidates
+or a localized optic disc. Images ride in the renderer-only `report.images`
+(kept out of machine-readable `report.data`). `reporting/renderReport.m` renders
+real panels when available and an honest gray "Not available" placeholder otherwise.
+
+**Verification.** `tests/unit/test_report_visualization.m` (3 tests): mock zero-map
+run never advertises attention and is never carried; the original image is always
+embedded; genuine non-trivial attention/evidence embeds and renders.
+Full MATLAB suite: **223/223 pass**.
+
+## R2 — Quality-gate thresholds never calibrated against a labeled subset (Medium) — PENDING
+
+**Finding.** The Stage-1 gate runs on committed `config/quality_thresholds.m`
+defaults; no human-rated quality subset exists in the repo, so agreement /
+false-rejection rate (§2 Stage 1) are unmeasured.
+
+**Fix (harness, not numbers).** `scripts/calibrate_quality_gate.m` +
+`config/quality_calibration.m` run the REAL `assessQuality()` over
+`data/manifests/quality_labels.csv` (grid of low-band/scores, config-driven
+objective), persist a metrics JSON audit trail, and — only when enabled — write
+the chosen set to `data/models/quality_gate_calibration.mat`, consumed by
+`quality_thresholds()`. Missing subset/images/labels raise structured
+`RetinaSense:calibrateQualityGate:*` errors and persist NOTHING.
+
+**Verification.** `tests/unit/test_quality_gate_calibration.m` (5 tests): missing
+subset / missing image / bad label each raise and persist nothing; a real
+synthetic-provenance run computes bounded metrics + JSON audit trail; a persisted
+override then activates in `quality_thresholds()` and reverts on teardown.
+
+**Status: PENDING** until a human-rated `quality_labels.csv` is provided → run the
+harness → commit metrics + override. Until then the committed defaults stand and
+no threshold was changed.
+
+## R3 — Borderline case reclassified 'good' after enhancement, contradicting the routing contract (Medium) — FIXED + TESTED
+
+**Finding.** On the enhancement path, `runPipeline` overwrote `c.quality` with the
+post-enhancement recheck, so a case routed as `borderline` ended the pipeline as
+`good`. Three tests (`test_B_qualityBorderline`, `test_borderlineEnhanceThenRecheckRouting`,
+`test_mockBorderlineCaseLoads`) specify that the gate **routing class** survives
+the enhancement, with the recheck outcome recorded as enhancement metadata.
+
+**Fix.** `scripts/runPipeline.m` keeps the Stage-1 routing class on the case when
+the enhanced image is adopted; `c.enhancement.recheckClass` / `c.enhancement.improved`
+carry the true post-enhancement recheck outcome, and `c.quality` never over-claims
+the enhanced pixels.
+
+**Verification.** The three naming tests pass plus the full MATLAB suite:
+**223/223 pass** (was 220/223). Backend 59/59, frontend 64/64, typecheck clean,
+python verifier all checks pass.
+
+## I1 — Live backend integration audit (real MATLAB engine over HTTP) — VERIFIED
+
+**Scope (2026-09-17).** Drove the real backend (`uvicorn`, `RETINASENSE_SIMULATION=off`,
+MATLAB R2026a engine `matlabEngine:true`) with real datasets on this host and observed
+the full chain — upload → quality gate → real DR model → calibration → Grad-CAM →
+human review → PDF → SQLite.
+
+**Fixes applied.**
+- `backend/tests/e2e_live.py` and `backend/tests/smoke_live.py` pointed at the
+  non-existent `D:\Project\RetinaSense\...` drive path (missing "s") — corrected to
+  `D:\Projects\RetinaSense\...`; candidate discovery and both live suites pass.
+- `backend/.env` had `RETINASENSE_EXPLAIN_ENABLED=0` while the real trained model
+  (`data/models/resnet50_dr_aptos.pt`) and torch are present on this host. Flipped to
+  `1`; the backend then produces genuine Grad-CAM artifacts (screening now exercises the
+  full explainability chain instead of honest-empty).
+
+**Verification (live, real engine).**
+- `e2e_live.py`: 16 IDRiD/APTOS candidates screened; 15 IDRiD images **honestly
+  rejected** by the real gate (`class=ungradable`, reason `focus`, REFOCUS instruction,
+  no fabricated grade); APTOS grade-0 accepted → `grade=0` `referable=false`,
+  `confidence=0.984` `uncertainty=0.063`, report generated, valid PDF (142,328 bytes).
+- `smoke_live.py`: 14/14 PASS — health+engine, auth, real screening, real Grad-CAM
+  artifact served as PNG (66,754 bytes), honest gate reject, report + PDF (271,609 bytes),
+  human approve review, DB-backed case list/stats.
+- DB rows verified for `RS-2026-00017`: `screening_results` (completed/good/grade 0 +
+  gradcam path), `human_reviews` (approve, Dr. Meera Rao), `final_decisions`
+  (0/No DR/referral 0), `reports` (summary + payload), `images` (relative path, no
+  traversal). Backend pytest suite still **59/59**.
+
 ## Verification commands (kept current)
 
 ```bash
 # Python mirror / backend (CI-able)
-& "C:\Users\shahu\AppData\Local\Temp\opencode\retinasense-venv\Scripts\python.exe" -m pytest -q   # from backend/
-python tools/python_verifier/mock_pipeline.py                                                        # from repo root
+python -m pytest -q                                                                  # from backend/
+python tools/python_verifier/mock_pipeline.py                                        # from repo root
+
+# Live backend integration (needs MATLAB engine on this host + datasets on disk)
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000                         # from backend/
+python tests/smoke_live.py                                                            # from backend/ (while server is up)
+python tests/e2e_live.py                                                              # from backend/ (while server is up)
 
 # Frontend
-npx vitest run tests/cases.test.tsx                                                                  # from frontend/
+npx vitest run tests/cases.test.tsx                                                  # from frontend/
+npx tsc --noEmit                                                                      # from frontend/
 
 # MATLAB (on a machine with MATLAB)
 runtests('tests')

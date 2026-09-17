@@ -26,7 +26,7 @@ end
 % =====================================================================
 
 function test_fullMandatoryFlowOrderMock(testCase)
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     expected = {'ingest','qualityGate','analysis','grading', ...
                 'explainability','calibration','review','report'};
     idx = zeros(1, numel(expected));
@@ -43,7 +43,7 @@ function test_mockModeRunsWithNoArtifacts(testCase)
     % Mock mode must never touch model artifacts: even when a benchmark record
     % / trained model IS present in this workspace, mock=true forces the honest
     % mock path (no gate, no artifact load, modelFile='', identity calibration).
-    c = runPipeline('scenario', 'good');          % default mock=true
+    c = runPipeline('scenario', 'good', 'mock', true);          % mock forced explicitly
     testCase.verifyEqual(c.grading.modelFile, '', ...
         'Mock mode must not claim a trained model.');
     testCase.verifyTrue(isfinite(c.calibrated.confidence), ...
@@ -55,7 +55,7 @@ end
 % =====================================================================
 
 function test_ungradableStopsAfterQualityGate(testCase)
-    c = runPipeline('scenario', 'ungradable');
+    c = runPipeline('scenario', 'ungradable', 'mock', true);
     testCase.verifyEqual(c.quality.class, 'ungradable');
     testCase.verifyEqual(c.pipeline.exitStage, 'qualityGate');
     for s = {'analysis','grading','explainability','calibration','review','report'}
@@ -67,7 +67,7 @@ function test_ungradableStopsAfterQualityGate(testCase)
 end
 
 function test_borderlineEnhanceThenRecheckRouting(testCase)
-    c = runPipeline('scenario', 'borderline');
+    c = runPipeline('scenario', 'borderline', 'mock', true);
     testCase.verifyEqual(c.quality.class, 'borderline');
     if strcmp(c.pipeline.exitStage, 'enhancementRecheck')
         % Enhanced image still ungradable -> recapture BEFORE any grading.
@@ -82,7 +82,7 @@ function test_borderlineEnhanceThenRecheckRouting(testCase)
 end
 
 function test_lowConfidenceRoutesToReview(testCase)
-    c = runPipeline('scenario', 'good');
+    c = runPipeline('scenario', 'good', 'mock', true);
     if c.calibrated.reviewRequired
         % No reviewer input at run time -> routed to the review queue.
         testCase.verifyEqual(c.review.status, 'reqReview');
@@ -96,8 +96,8 @@ end
 function test_evidenceAdvisoryNeverChangesGrading(testCase)
     % The grading struct carries §4.4 fields only; evidence fields never leak
     % into it, and two runs with identical inputs give identical grading.
-    ca = runPipeline('scenario', 'good');
-    cb = runPipeline('scenario', 'good');
+    ca = runPipeline('scenario', 'good', 'mock', true);
+    cb = runPipeline('scenario', 'good', 'mock', true);
     fields4_4 = {'rawProbs','grade','referableProb','referable','modelFile'};
     testCase.verifyEqual(fieldnames(ca.grading), fields4_4', ...
         'grading must expose exactly the §4.4 contract fields.');

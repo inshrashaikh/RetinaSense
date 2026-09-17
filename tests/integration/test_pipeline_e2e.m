@@ -7,7 +7,7 @@ function test_allScenariosEndToEnd(testCase)
     % A run either reaches 'report' (full path) or exits at an honest gate:
     % qualityGate (ungradable) or enhancementRecheck (borderline not fixable).
     for sc = {'good', 'borderline', 'ungradable'}
-        c = runPipeline('scenario', sc{1});
+        c = runPipeline('scenario', sc{1}, 'mock', true);
         verifyTrue(testCase, ismember(c.quality.class, {'good','borderline','ungradable'}));
         if any(strcmp(c.pipeline.stages, 'report'))
             verifyTrue(testCase, ~isempty(c.report.filepath));
@@ -24,7 +24,8 @@ end
 function test_fromFileToReport(testCase)
     meta = struct('patientId','IP-42','eye','left', ...
         'timestamp','2026-01-01T00:00:00','phcId','PHC-ALPHA');
-    c = runPipeline(meta, fullfile(paths().assets, 'synthetic_fundus_demo.png'));
+    c = runPipeline(meta, fullfile(paths().assets, 'synthetic_fundus_demo.png'), ...
+        'mock', true);
     verifyTrue(testCase, ~isempty(c.image));
     verifyEqual(testCase, c.meta.patientId, 'IP-42');
     if any(strcmp(c.pipeline.stages, 'report'))
@@ -42,6 +43,6 @@ function test_logsWritten(testCase)
     if exist(p.log.file, 'file') == 2
         delete(p.log.file);
     end
-    runPipeline('scenario', 'good');
+    runPipeline('scenario', 'good', 'mock', true);
     verifyTrue(testCase, exist(p.log.file, 'file') == 2);
 end

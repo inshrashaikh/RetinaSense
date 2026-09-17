@@ -15,7 +15,6 @@ const api = vi.hoisted(() => ({
   listCases: vi.fn(async () => []),
   fetchCaseImage: vi.fn(async () => new Blob()),
   submitReview: vi.fn(),
-  fetchReport: vi.fn(),
   fetchHealth: vi.fn(),
 }));
 
@@ -27,7 +26,6 @@ vi.mock('../src/api/endpoints', () => ({
   listCases: api.listCases,
   fetchCaseImage: api.fetchCaseImage,
   submitReview: api.submitReview,
-  fetchReport: api.fetchReport,
   fetchHealth: api.fetchHealth,
 }));
 
@@ -47,6 +45,12 @@ const mutableCase: CaseResponse = {
 beforeEach(() => {
   vi.clearAllMocks();
   window.location.hash = '';
+  // The reviewer is taken from the signed-in session (the backend signs the
+  // review with the authenticated user; the UI shows it as read-only).
+  localStorage.setItem(
+    'retinasense_user',
+    JSON.stringify({ id: 1, username: 'meera', name: 'Dr. Meera Rao', role: 'ophthalmologist' }),
+  );
   mutableCase.humanReview = null;
   mutableCase.finalDecision = null;
   mutableCase.aiPrediction = {
@@ -96,11 +100,11 @@ describe('Human override workflow', () => {
     const gradeSelect = screen.getByLabelText('Override DR grade');
     await user.selectOptions(gradeSelect, '3');
 
-    await user.type(screen.getByLabelText(/Reviewer/), 'Dr. Meera Rao');
     await user.type(screen.getByLabelText('Notes'), 'Confirmed clinically; upgrading.');
 
     await user.click(submit);
 
+    // reviewerId is NOT user-editable: it comes from the signed-in session.
     expect(api.submitReview).toHaveBeenCalledWith('RS-REVIEW-1', {
       action: 'override',
       reviewerId: 'Dr. Meera Rao',
@@ -124,7 +128,6 @@ describe('Human override workflow', () => {
     await user.click(screen.getByLabelText('Override grade'));
     const gradeSelect = screen.getByLabelText('Override DR grade');
     await user.selectOptions(gradeSelect, '3');
-    await user.type(screen.getByLabelText(/Reviewer/), 'Dr. Meera Rao');
     await user.click(screen.getByRole('button', { name: 'Submit review' }));
 
     // Final decision is the override…

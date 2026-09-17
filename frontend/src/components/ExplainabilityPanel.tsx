@@ -8,22 +8,32 @@
  * The frontend NEVER draws or invents attention or evidence — if the backend
  * reports none, the panel shows an honest empty state and never a fabricated
  * map.
+ *
+ * The two failure modes are kept apart:
+ *   * 404 / ARTIFACT_UNAVAILABLE → honest "no artifact produced" state.
+ *   * network error, timeout, or 5xx → a real error the user can act on.
  */
 import { useEffect, useState } from 'react';
 import { fetchCaseArtifact } from '../api/endpoints';
 import type { Explainability } from '../api/types';
+import { friendlyError, isArtifactUnavailable } from '../utils/errors';
+import { Alert } from './ui/Alert';
 import { Badge } from './ui/Badge';
 import { Card, CardBody, CardHeader } from './ui/Card';
 
-type ArtifactState = 'loading' | 'done' | 'unavailable';
+type ArtifactState = 'loading' | 'done' | 'unavailable' | 'error';
 
 function ArtifactFigure({ caseId, name }: { caseId: string; name: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [state, setState] = useState<ArtifactState>('loading');
+  const [error, setError] = useState<{ title: string; detail: string } | null>(null);
 
   useEffect(() => {
     let objectUrl: string | null = null;
     let cancelled = false;
+
+    setState('loading');
+    setError(null);
 
     fetchCaseArtifact(caseId, name)
       .then((blob) => {
@@ -32,9 +42,17 @@ function ArtifactFigure({ caseId, name }: { caseId: string; name: string }) {
         setSrc(objectUrl);
         setState('done');
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setState('unavailable');
+        // A 404 means the pipeline produced no artifact (honest state). Any
+        // other failure (backend down, timeout, 5xx, token trouble) is a real
+        // problem and must NOT be shown as a calm "no artifact" note.
+        if (isArtifactUnavailable(err)) {
+          setState('unavailable');
+        } else {
+          setError(friendlyError(err));
+          setState('error');
+        }
       });
 
     return () => {
@@ -50,6 +68,10 @@ function ArtifactFigure({ caseId, name }: { caseId: string; name: string }) {
         <figcaption>Model attention — not proof of causality.</figcaption>
       </figure>
     );
+  }
+
+  if (state === 'error') {
+    return error ? <Alert variant="error" title={error.title}>{error.detail}</Alert> : null;
   }
 
   if (state === 'unavailable') {

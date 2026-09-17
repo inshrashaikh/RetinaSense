@@ -66,7 +66,7 @@ _Design document. No implementation code. See `RetinaSense_PRD.docx` for require
 - The **quality gate is the entry gate**; its recapture feedback is a first-class differentiator.
 - **Retinal analysis is advisory/evidence-only and never blocks grading** — this protects the working core (PRD §10, §13).
 - The **classifier backbone is chosen by benchmark**, not pinned (see §3.2).
-- The **Simulink model is an independent track** (its own folder) — the stated differentiator nobody else builds. As of freeze, the delivery is the parameter/scenario configuration (`simulink/scenario_params.m`) plus drivers that honestly raise `NotImplemented` until the `DRTelemedicine.slx` model is constructed (Sprint 6).
+- The **Simulink model is an independent track** (its own folder) — the stated differentiator nobody else builds. The delivery is the checked-in `simulink/DRTelemedicine.slx` SimEvents model plus parameter/scenario configuration (`simulink/scenario_params.m`), drivers (`simulink/run_simulink_scenarios.m`, `simulink/analyze_capacity.m`) and the smoke test (`simulink/smoke_DRTelemedicine.m`). Measured results are persisted to `simulink/output/*.json` (see `docs/AUDIT.md`).
 
 ---
 
@@ -87,6 +87,14 @@ _Design document. No implementation code. See `RetinaSense_PRD.docx` for require
 | Output | `quality` struct: `score`, class `{good,borderline,ungradable}`, per-metric `failureReasons` |
 | Toolbox | Image Processing (rgb2gray, conv2/Laplacian, morphology for FOV mask) |
 | Metric | agreement with human-rated quality on small labeled subset; false-rejection rate |
+
+Threshold calibration is harness-driven, not hard-coded: `scripts/calibrate_quality_gate.m`
+(grid + objective in `config/quality_calibration.m`) runs the real `assessQuality()`
+gate over a labeled subset (`data/manifests/quality_labels.csv`, human-rated or
+explicitly `synthetic`) and writes the chosen set to
+`data/models/quality_gate_calibration.mat`, which `config/quality_thresholds.m`
+applies only when present + enabled. Missing subset → structured error, NOTHING
+persisted (no fabricated thresholds; TODO(Sprint 1)).
 
 ### Stage 2 — Recapture Feedback
 | Input | ungradable decision + failure vector |
@@ -286,9 +294,20 @@ report.data     struct (structured, machine-readable subset of case)
 report.summary  string  % concise paragraph for rapid review
 report.filepath string  % rendered PDF/PNG path
 report.review   struct  % embedded final review/decision
+report.images   struct  % renderer-only visuals, kept OUT of report.data:
+                        %   image, attentionImage, evidenceOverlay, gradCam
 ```
 
 All contract fields are mandatory (or explicitly `[]`/`NaN`) so integration is deterministic and unit-testable.
+
+**Visualization honesty (AGENTS.md #3).** `report.images` is populated from
+_content_, never from "was a function called". `gradCamAvailable` / 
+`attentionImageAvailable` require a non-zero heatmap (`any(gradCam(:) > 0)`), and
+`evidenceOverlayAvailable` requires real lesion-count candidates or a localized
+optic disc. A zero-map mock therefore renders an honest gray "Not available"
+panel instead of a black image advertised as attention. Images live in
+`report.images` (consumed by `renderReport`) and never enter the machine-readable
+`report.data` subset.
 
 ---
 
@@ -338,7 +357,9 @@ RetinaSense/
 │  ├─ runAblation.m
 │  └─ metrics.m
 ├─ simulink/                     # independent track
-│  ├─ DRTelemedicine.slx
+│  ├─ DRTelemedicine.slx         # flow-only model (KPI stats enabled at runtime)
+│  ├─ build_DRTelemedicine.m     # builds DRTelemedicine.slx
+│  ├─ instrument_for_kpis.m      # post-build passive KPI stats + To Workspace
 │  ├─ run_simulink_scenarios.m
 │  ├─ analyze_capacity.m
 │  └─ scenario_params.m
@@ -379,7 +400,7 @@ RetinaSense/
 
 ## 7. SIMULINK ARCHITECTURE (SimEvents discrete-event model)
 
-**Model: `simulink/DRTelemedicine.slx`** *(planned artifact — not yet in the repository; the folder ships configuration + drivers that raise `NotImplemented` until the model is built, see `simulink/README.md`)*
+**Model: `simulink/DRTelemedicine.slx`** *(checked into the repository and runnable; built by `simulink/build_DRTelemedicine.m`)*
 
 ```
 [Patient Arrival Generator] → [Acquisition Server] → [Transmission/Network Server]
@@ -399,9 +420,11 @@ RetinaSense/
 
 **Named inputs (workspace struct / Simulink params):** patient arrival rate, acquisition time, image size (MB), bandwidth (Mbps), transmission delay, AI processing time, recapture rate, referral rate, review time, number of reviewers.
 
-**Outputs:** throughput (patients/day), mean/max wait, queue length, reviewer utilization, required bandwidth, bottleneck node, annual capacity.
+**Outputs:** throughput (patients/day), annual capacity, **measured** average waiting time / queue length (Acquisition Queue `AverageWait` / `AverageQueueLength` statistics), measured reviewer utilization (Review Server `Utilization` statistic), required bandwidth, bottleneck node.
 
-**Driver `run_simulink_scenarios.m`:** what-if scenarios (low/high load; 1/2/4 Mbps rural bandwidth; 1/2/5 reviewers), tabulate, and **check whether 100,000 patients/yr (≈274/day) is achievable** per scenario. `analyze_capacity.m` finds bottleneck and recomputes resources. The annual-capacity claim is **only made after the model demonstrates it**.
+**KPI measurement scheme (R2026a-safe, non-perturbing):** the checked-in `DRTelemedicine.slx` is built **flow-only** (its build file supports an `enableStats` flag only for experiments). The block statistics that feed the three performance KPIs are enabled **post-build, at simulation time**, by `simulink/instrument_for_kpis.m`, which then attaches one dedicated To Workspace observer per signal (`kpiQWait`, `kpiQLen`, `kpiRevUtil`, `kpiCompleted`). This is deliberate: enabling SimEvents stat output ports during build changes the entity structure on queue/server blocks and breaks every Entity Input Switch merge (verified as `MismatchInputSigHierInfo` on R2026a). Enabled after build, the same statistics are pure passive listeners and throughput is provably unchanged (143/day baseline identical to the pristine uncount model). Using entity replicators instead (an earlier approach) throttled throughput 143→97/day — rejected. When the statistics are enabled, SimEvents prepends the stat signal ports and pushes the block's entity output port to the last position (auto-remapping existing lines); instrument_for_kpis verifies the resulting port layout rather than assuming it.
+
+**Driver `run_simulink_scenarios.m`:** what-if scenarios (low/high load; 1/2/4 Mbps rural bandwidth; 1/2/5 reviewers), tabulate, and **check whether 100,000 patients/yr (≈274/day) is achievable** per scenario. `analyze_capacity.m` finds bottleneck and recomputes resources. The annual-capacity claim is **only made after the model demonstrates it**: measured results are persisted to `simulink/output/*.json`, and the feasibility verdict in `analyze_capacity.m` is made from those measured, full-workday simulation outputs — never from a partial window or an assumption.
 
 ---
 
@@ -469,7 +492,7 @@ RetinaSense/
 
 ## 12. DEVELOPMENT ORDER (fastest path to working demo)
 
-1. **Sprint 0 — Skeleton/data:** repo structure, `Case` struct, `runPipeline`, data + manifests, test harness.
+1. **Shared foundation (done):** repo structure, `Case` struct, `runPipeline`, data + manifests, test harness.
 2. **Sprint 1 — Quality gate (differentiator):** assessQuality + recapture; demo good/borderline/ungradable.
 3. **Sprint 2 — Classifier + backbone benchmark:** train ResNet-50 & EfficientNet-B0, benchmark on SE/SP/AUROC/latency/size, **select finalized backbone**.
 4. **Sprint 3 — Calibration + uncertainty:** temperature scaling, ECE, reviewRequired routing.

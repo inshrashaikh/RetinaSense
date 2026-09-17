@@ -13,7 +13,7 @@ function [enhanced, enhMeta] = enhanceImage(borderlineImage, quality, params)
 %               improved (bool), recheckClass
 %
 %   Architecture: CLAHE + illumination normalization + denoising, parameterized
-%   per failing metric (§2 Stage 3). This Sprint-0 build performs the CLAHE and
+%   per failing metric (§2 Stage 3). This pre-model build performs the CLAHE and
 %   denoise plumbing on the actual pixels; 'improved' and 'recheckClass' are set
 %   by the caller's re-check (Stage 4) and filled here as placeholders.
 %

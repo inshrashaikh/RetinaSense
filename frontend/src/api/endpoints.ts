@@ -101,13 +101,6 @@ export async function submitReview(
   });
 }
 
-export async function fetchReport(caseId: string): Promise<ReportResponse> {
-  if (isDemoMode) return demo.fetchReport(caseId);
-  return apiRequest<ReportResponse>(`/api/cases/${encodeURIComponent(caseId)}/report`, {
-    timeoutMs: 15_000,
-  });
-}
-
 export async function fetchHealth(): Promise<HealthResponse> {
   if (isDemoMode) return demo.fetchHealth();
   return apiRequest<HealthResponse>('/api/health', { timeoutMs: 10_000 });
