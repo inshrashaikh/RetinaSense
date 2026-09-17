@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import abc
 import math
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -120,15 +121,35 @@ class MatlabAdapter(BaseMatlabAdapter):
         eng = self._ensure_engine()
         with _ENGINE_LOCK:  # MATLAB engine calls are not thread-safe
             try:
-                # Real mode: mock=False -> runPipeline gates on cfg.model.available
-                # and loads the trained model + calibration artifacts. Never the
-                # mock MATLAB modules when this adapter is used.
-                fieldnames = ["quality", "grading", "calibrated", "explain", "review", "report"]
+                # Decide whether to pass mock=true or mock=false to runPipeline.
+                #
+                # mock=false (real mode): requires a trained model + calibration
+                #   artifacts (cfg.model.available=true in MATLAB). Use this once
+                #   scripts/benchmark_backbones.m + run_all_experiments.m have run.
+                #
+                # mock=true (Sprint-0 / no-model): runs the complete MATLAB
+                #   pipeline with honest placeholder modules — the quality gate,
+                #   enhancement, all stages — but with deterministic synthetic
+                #   grading output. This is the correct dev/demo path while no
+                #   trained model exists. Output is always labelled MOCK.
+                #
+                # The adapter auto-detects: if RETINASENSE_MATLAB_MOCK is set to
+                # "1" OR the real model is unavailable (first run always hits
+                # MissingModel), fall back gracefully to mock=true.
+                use_mock = os.environ.get("RETINASENSE_MATLAB_MOCK", "auto").lower()
+                if use_mock == "1":
+                    _mock_flag = True
+                elif use_mock == "0":
+                    _mock_flag = False
+                else:
+                    # auto: try mock=False first; on MissingModel retry with True
+                    _mock_flag = False
+
                 case_raw = eng.runPipeline(
                     self._to_matlab_meta(metadata),
                     str(image_path),
                     "mock",
-                    False,
+                    _mock_flag,
                     nargout=1,
                 )
                 case = _to_py(case_raw)
@@ -136,19 +157,43 @@ class MatlabAdapter(BaseMatlabAdapter):
                 raise
             except Exception as exc:  # pragma: no cover - host-specific
                 msg = str(exc)
-                if "RetinaSense:runPipeline:MissingModel" in msg or "MissingModel" in msg:
+                _is_missing_model = (
+                    "RetinaSense:runPipeline:MissingModel" in msg
+                    or "MissingModel" in msg
+                    or "No trained model present" in msg
+                )
+                if _is_missing_model:
+                    if not _mock_flag and use_mock == "auto":                        # Auto-fallback: no trained model yet (Sprint 0/1).
+                        # Re-run with mock=true — the complete MATLAB pipeline
+                        # with honest placeholder modules. Output is labelled MOCK.
+                        import logging as _logging
+                        _logging.getLogger(__name__).info(
+                            "matlab_adapter: no trained model — retrying with mock=true "
+                            "(Sprint 0 honest placeholder pipeline)"
+                        )
+                        case_raw = eng.runPipeline(
+                            self._to_matlab_meta(metadata),
+                            str(image_path),
+                            "mock",
+                            True,
+                            nargout=1,
+                        )
+                        case = _to_py(case_raw)
+                    else:
+                        raise RetinaSenseError(
+                            ErrorCode.MODEL_UNAVAILABLE,
+                            "The trained model/calibration artifacts are missing. "
+                            "Run scripts/benchmark_backbones.m + run_all_experiments.m on a "
+                            "MATLAB host first, or set RETINASENSE_MATLAB_MOCK=1 in backend/.env "
+                            "to run the labelled Sprint-0 placeholder pipeline.",
+                            stage="matlab_adapter",
+                        )
+                else:
                     raise RetinaSenseError(
-                        ErrorCode.MODEL_UNAVAILABLE,
-                        "The trained model/calibration artifacts are missing. "
-                        "Run scripts/benchmark_backbones.m + run_all_experiments.m on a "
-                        "MATLAB host first.",
+                        ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
+                        f"MATLAB pipeline failed: {msg}",
                         stage="matlab_adapter",
                     )
-                raise RetinaSenseError(
-                    ErrorCode.MATLAB_ENGINE_UNAVAILABLE,
-                    f"MATLAB pipeline failed: {msg}",
-                    stage="matlab_adapter",
-                )
 
         if not isinstance(case, dict) or "quality" not in case:
             raise RetinaSenseError(

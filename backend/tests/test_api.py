@@ -178,9 +178,16 @@ def test_matlab_unavailable(monkeypatch):
 
 def test_screen_route_pipeline_unavailable(monkeypatch):
     """The default (real) adapter must FAIL the screening with a structured
-    503 — never fabricate a grade when MATLAB is missing."""
-    import app.services.matlab_adapter as matlab_adapter
+    503 — never fabricate a grade when MATLAB is missing.
 
+    Patches both SIMULATION_MODE (to 'off' so the real MatlabAdapter path is
+    exercised even when backend/.env sets RETINASENSE_SIMULATION=mock) and
+    MATLAB_ENGINE_AVAILABLE (to False so it raises 503 without MATLAB).
+    """
+    import app.services.matlab_adapter as matlab_adapter
+    import app.config as config_mod
+
+    monkeypatch.setattr(config_mod, "SIMULATION_MODE", "off")
     monkeypatch.setattr(matlab_adapter, "MATLAB_ENGINE_AVAILABLE", False)
     case_id = _create_case()
     resp = client.post(

@@ -2,6 +2,7 @@ fastapi==0.115.12
 uvicorn==0.34.3
 pydantic==2.11.3
 python-multipart==0.0.20
+python-dotenv==1.0.1
 pytest==8.4.1
 httpx==0.28.1
 sqlalchemy==2.0.52
@@ -10,7 +11,8 @@ matplotlib==3.11.2
 reportlab==5.0.1
 numpy==2.3.5
 pillow==12.3.0
-opencv-python==5.0.0
+# Note: opencv-python 5.0.0 does not exist on PyPI; use the latest 4.x release.
+opencv-python==4.10.0.84
 
 # Deep learning — used by the real PyTorch Grad-CAM explainability path
 # (app/services/explainability.py ⇒ data/models/resnet50_dr_aptos.pt).

@@ -1,31 +1,139 @@
-# Biomedical datasets and derived tensors (licensing: APTOS, IDRiD, DRIVE,
-# Messidor-2 require access agreements) - never commit.
+# ─── Biomedical datasets ─────────────────────────────────────────────────────
+# Licensing: APTOS, IDRiD, DRIVE, Messidor-2 require access agreements.
+# Never commit raw or processed patient data.
 data/raw/
 data/processed/
+dataset/
 
-# Trained model weights and fitted calibration artifacts.
+# ─── Trained model weights and calibration artifacts ─────────────────────────
 data/models/
+backend/data/models/
 
-# Generated outputs (reports, logs, plots, metrics).
+# ─── Generated outputs (reports, logs, plots, metrics, PDFs) ─────────────────
 output/
+output/artifacts/
+backend/logs/
+*.log
+*.out.log
+*.err.log
+retinaSense.log
 
-# Python verifier cruft.
+# ─── Python virtual environments ─────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+backend/env/
+# The backend/myenv venv is intentionally minimal and checked in (just scripts);
+# keep its tracked files but ignore anything pip installs inside it.
+backend/myenv/Lib/
+backend/myenv/Include/
+
+# ─── Python bytecode and caches ──────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+*.egg-info/
+dist/
+build/
+*.egg
+pip-wheel-metadata/
+
+# ─── Environment / secrets files ─────────────────────────────────────────────
+# Local .env files hold secrets and machine-specific config — NEVER commit.
+# Commit .env.example (or .env.example.bat) with safe placeholder values only.
+.env
+.env.*
+!.env.example
+!.env.example.bat
+backend/.env
+frontend/.env
+# (frontend/.env.example is committed as a template — keep it)
+!frontend/.env.example
+
+# ─── Backend runtime data ─────────────────────────────────────────────────────
+# Per-case images, JSON blobs, and the SQLite database are local state only.
+backend/data/
+!backend/data/.gitkeep
+
+# ─── Node.js / frontend ──────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.cache/
+*.local
+
+# ─── Vite / TypeScript build artifacts ───────────────────────────────────────
+dist/
+dist-ssr/
+*.tsbuildinfo
+.vite/
+
+# ─── Python verifier output ──────────────────────────────────────────────────
 tools/python_verifier/output/
 
-# Backend runtime + local virtualenv (no committed data, no committed deps).
-backend/.venv/
-backend/data/
-
-# Demo image assets may be large (keep the small committed synthetic demo).
+# ─── Demo image assets — keep only the committed synthetic fundus image ───────
 assets/*.jpg
 assets/*.png
 !assets/synthetic_fundus_demo.png
 
-# MATLAB/OS cruft.
+# ─── MATLAB / Simulink artifacts ─────────────────────────────────────────────
+# Auto-save files, compiled Simulink cache, code-gen outputs.
 *.asv
 *.mlappinstall
+*.mex*
+*.mexa64
+*.mexw64
+*.mexmaci64
+codegen/
+slprj/
+simulink/slprj/
+*.slxc
+DRTelemedicine.slxc
+
+# ─── OS cruft ────────────────────────────────────────────────────────────────
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
 .DS_Store
-node_modules
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+
+# ─── Editors and IDEs ────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.kate-swp
+*~
+.project
+.classpath
+.settings/
+*.iml
+
+# ─── Coverage and profiling ──────────────────────────────────────────────────
+.coverage
+coverage.xml
+htmlcov/
+*.cover
+*.prof
+lcov.info
+coverage/

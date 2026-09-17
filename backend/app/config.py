@@ -5,6 +5,18 @@ All values are prototype-safe defaults. No secrets, no cloud infra.
 import os
 from pathlib import Path
 
+# Load environment variables from backend/.env when present (dev/local use).
+# python-dotenv does NOT override variables already set in the environment,
+# so CI/production env vars always take precedence.
+try:
+    from dotenv import load_dotenv as _load_dotenv
+
+    _env_file = Path(__file__).resolve().parent.parent / ".env"
+    if _env_file.is_file():
+        _load_dotenv(_env_file, override=False)
+except ImportError:  # python-dotenv not installed — that is fine
+    pass
+
 # Root directories
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY_ROOT = BACKEND_ROOT.parent
@@ -44,12 +56,55 @@ CASE_ID_WIDTH = 5  # zero-padded digits
 # The engine is considered available when the matlab.engine Python package can
 # be imported on this host. Set RETINASENSE_MATLAB_ENGINE=1 to force-enable or
 # =0 to force-disable (e.g. CI machines without the MATLAB engine package).
+
+# --- MATLAB DLL bootstrap (Windows only) ------------------------------------
+# On Windows, matlab/__init__.py calls os.add_dll_directory() *inside* the
+# module body, but the DLL loader caches the first lookup result. If bin\win64
+# is not already registered via os.add_dll_directory() before the first
+# `import matlab` statement, the transitive DLL load for
+# matlabmultidimarrayforpython.pyd fails even though bin\win64 is on PATH.
+# We pre-register it here so that the import below always succeeds.
+_MATLAB_BIN_WIN64 = Path(
+    os.environ.get(
+        "MATLAB_BIN_WIN64",
+        r"C:\Program Files\MATLAB\R2026a\bin\win64",
+    )
+)
+_MATLAB_EXTERN_BIN_WIN64 = Path(
+    os.environ.get(
+        "MATLAB_EXTERN_BIN_WIN64",
+        r"C:\Program Files\MATLAB\R2026a\extern\bin\win64",
+    )
+)
+_MATLAB_ENGINE_WIN64 = Path(
+    os.environ.get(
+        "MATLAB_ENGINE_WIN64",
+        r"C:\Program Files\MATLAB\R2026a\extern\engines\python\dist\matlab\engine\win64",
+    )
+)
+
+import sys as _sys
+
+if os.name == "nt":  # Windows only
+    try:
+        if _MATLAB_BIN_WIN64.is_dir():
+            os.add_dll_directory(str(_MATLAB_BIN_WIN64))
+        if _MATLAB_EXTERN_BIN_WIN64.is_dir():
+            os.add_dll_directory(str(_MATLAB_EXTERN_BIN_WIN64))
+        if _MATLAB_ENGINE_WIN64.is_dir() and str(_MATLAB_ENGINE_WIN64) not in _sys.path:
+            _sys.path.insert(0, str(_MATLAB_ENGINE_WIN64))
+        if _MATLAB_EXTERN_BIN_WIN64.is_dir() and str(_MATLAB_EXTERN_BIN_WIN64) not in _sys.path:
+            _sys.path.insert(0, str(_MATLAB_EXTERN_BIN_WIN64))
+    except Exception:
+        pass  # Non-fatal: if the dirs don't exist the import will fail below
+# ---------------------------------------------------------------------------
+
 _MATLAB_ENGINE_IMPORTABLE = False
 try:
     import matlab.engine  # type: ignore[import-not-found]  # noqa: F401
 
     _MATLAB_ENGINE_IMPORTABLE = True
-except ImportError:  # pragma: no cover - depends on host setup
+except (ImportError, OSError):  # pragma: no cover - depends on host setup
     _MATLAB_ENGINE_IMPORTABLE = False
 
 MATLAB_ENGINE_AVAILABLE = (
