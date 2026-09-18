@@ -27,5 +27,5 @@ def health_check() -> HealthResponse:
         status="ok",
         matlabEngine=MATLAB_ENGINE_AVAILABLE,
         database=_database_status(),
-        version="0.1.0-prototype",
+        version="0.2.0-prototype",
     )

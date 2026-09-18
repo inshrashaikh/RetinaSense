@@ -61,21 +61,36 @@ const REPORTS_ITEM: NavItem = {
  */
 function navGroupsFor(role: Role | undefined | null): NavGroup[] {
   const isOperator = role === 'phc_operator';
-  const records: NavItem[] = [CASES_ITEM];
+  const isAdmin = role === 'admin';
 
-  if (!isOperator) {
-    records.push({
-      label: 'Review queue',
-      path: '/review',
-      icon: 'inbox',
-      match: (p) => p === '/review',
-    });
+  const reviewItem: NavItem = {
+    label: 'Review queue',
+    path: '/review',
+    icon: 'inbox',
+    match: (p) => p === '/review',
+  };
+
+  if (isAdmin) {
+    // District admins lead with the capacity simulation view, then cases.
+    return [
+      {
+        label: 'District',
+        items: [DASHBOARD_ITEM, CASES_ITEM, REPORTS_ITEM],
+      },
+      { label: 'Clinical work', items: [reviewItem] },
+    ];
   }
-  records.push(REPORTS_ITEM);
+
+  if (isOperator) {
+    return [
+      { label: 'Screening', items: SCREENING_ITEMS },
+      { label: 'Capture records', items: [CASES_ITEM, REPORTS_ITEM] },
+    ];
+  }
 
   return [
     { label: 'Screening', items: SCREENING_ITEMS },
-    { label: isOperator ? 'Capture records' : 'Clinical work', items: records },
+    { label: 'Clinical work', items: [CASES_ITEM, reviewItem, REPORTS_ITEM] },
   ];
 }
 
@@ -188,8 +203,10 @@ export function AppShell({ children, demoMode }: { children: ReactNode; demoMode
                   </Button>
                 </div>
               )}
-              {/* The CTA is redundant while the screening form itself is open. */}
-              {path !== '/screening' && (
+              {/* The CTA is redundant while the screening form itself is open,
+                  and district admins do not capture cases (no screening in their
+                  nav) so it would duplicate in-app links. */}
+              {user?.role !== 'admin' && path !== '/screening' && (
                 <Button
                   variant="primary"
                   size="sm"

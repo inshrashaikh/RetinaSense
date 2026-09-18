@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 from .config import CASES_DIR, CORS_ORIGINS, IMAGES_DIR, MATLAB_ENGINE_AVAILABLE
 from .db.session import configure_database, init_db
-from .routes import auth, cases, health
+from .routes import auth, cases, health, simulation
 from .services import auth as auth_svc
 from .storage import database_store
 from .utils.errors import RetinaSenseError
@@ -85,3 +85,4 @@ def root_status() -> dict[str, str]:
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(cases.router)
+app.include_router(simulation.router)

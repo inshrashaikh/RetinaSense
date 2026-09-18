@@ -24,7 +24,7 @@ const USER_KEY = 'retinasense_user';
 export const ROLE_LABELS: Record<Role, string> = {
   phc_operator: 'PHC operator',
   ophthalmologist: 'Ophthalmologist',
-  admin: 'Administrator',
+  admin: 'District administrator',
 };
 
 export function roleLabel(role: Role | undefined | null): string {

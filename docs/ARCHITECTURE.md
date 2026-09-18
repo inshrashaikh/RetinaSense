@@ -426,6 +426,8 @@ RetinaSense/
 
 **Driver `run_simulink_scenarios.m`:** what-if scenarios (low/high load; 1/2/4 Mbps rural bandwidth; 1/2/5 reviewers), tabulate, and **check whether 100,000 patients/yr (≈274/day) is achievable** per scenario. `analyze_capacity.m` finds bottleneck and recomputes resources. The annual-capacity claim is **only made after the model demonstrates it**: measured results are persisted to `simulink/output/*.json`, and the feasibility verdict in `analyze_capacity.m` is made from those measured, full-workday simulation outputs — never from a partial window or an assumption.
 
+**Admin endpoint `GET /api/simulation/capacity` (admin-only, read-only):** serves the persisted run files (`simulink/output/district_capacity_results_*.json`, newest first) to the admin capacity dashboard in the web console. It reports `available: false` when no run exists — it never substitutes a figure. `simulink/output/` is git-ignored runtime output, so the endpoint returns the honest "no runs yet" state until a MATLAB run has produced results.
+
 ---
 
 ## 8. MODEL / DATA INTERFACES + NAMING

@@ -25,6 +25,7 @@ import type {
   ReportResponse,
   ReviewRequest,
   ReviewResponse,
+  SimulationCapacityResponse,
   FinalDecision,
 } from './types';
 
@@ -326,6 +327,81 @@ export async function fetchCaseStats(): Promise<CaseStats> {
     recaptureRequired: cases.filter((c) => c.status === 'recapture_required').length,
     reviewed: cases.filter((c) => Boolean(c.humanReview)).length,
     created: cases.filter((c) => c.status === 'created').length,
+  };
+}
+
+/**
+ * DEMO counterpart of the district-capacity endpoint. Every figure below is
+ * clearly SIMULATED for exercising the UI — the capacity dashboard banner
+ * disclaims it. Distinct per-scenario numbers keep the scenario table honest
+ * about the SHAPE of the API; they are never presented as measured results.
+ */
+export async function fetchSimulationCapacity(): Promise<SimulationCapacityResponse> {
+  await delay();
+  return {
+    available: true,
+    latest: {
+      generatedAt: 'DEMO — simulated scenario set',
+      matlabVersion: 'demo',
+      simulinkVersion: 'demo',
+      simEventsVersion: 'demo',
+      modelFile: 'DRTelemedicine.slx',
+      dataSourcePolicy:
+        'DEMO MODE: simulated values for UI exercise only. Not measured from a SimEvents run.',
+      results: [
+        {
+          scenario: 'baseline',
+          executionStatus: 'DEMO',
+          measurementWindow: 'FULL_WORKDAY',
+          patientsPerDay: 274,
+          bandwidthMbps: 2.0,
+          numReviewers: 2,
+          simTimeHours: 8,
+          completedPatients: 150,
+          throughput: 150.0,
+          annualCapacity: 54750,
+          averageWaitingTime: 4000,
+          meanWaitingTime: 1500,
+          maxWaitingTime: 4500,
+          queueLength: 28,
+          acqUtilization: 0.9,
+          networkUtilization: 0.2,
+          aiUtilization: 0.3,
+          revUtilization: 0.05,
+          reviewerUtilization: 0.05,
+          bottleneck: 'Acquisition',
+        },
+        {
+          scenario: 'team_5_reviewers',
+          executionStatus: 'DEMO',
+          measurementWindow: 'FULL_WORKDAY',
+          patientsPerDay: 274,
+          bandwidthMbps: 2.0,
+          numReviewers: 5,
+          simTimeHours: 8,
+          completedPatients: 180,
+          throughput: 180.0,
+          annualCapacity: 65700,
+          averageWaitingTime: 3200,
+          meanWaitingTime: 1300,
+          maxWaitingTime: 3900,
+          queueLength: 22,
+          acqUtilization: 0.9,
+          networkUtilization: 0.2,
+          aiUtilization: 0.3,
+          revUtilization: 0.02,
+          reviewerUtilization: 0.02,
+          bottleneck: 'Acquisition',
+        },
+      ],
+    },
+    runs: [],
+    target: {
+      annualPatients: 100_000,
+      dailyEquivalent: 274,
+      note:
+        '100,000 patients/year is the reference scalability target. Demo figures never reach it by assumption.',
+    },
   };
 }
 
