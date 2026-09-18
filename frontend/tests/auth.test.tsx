@@ -80,7 +80,8 @@ describe('auth gate', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(api.login).toHaveBeenCalledWith('doctor', 'doctor123');
-    expect(await screen.findByText('RetinaSense screening console')).toBeInTheDocument();
+    // An ophthalmologist lands on the clinical review dashboard.
+    expect(await screen.findByRole('heading', { name: 'Clinical review' })).toBeInTheDocument();
     expect(screen.getByText('Dr. Meera Rao')).toBeInTheDocument();
   });
 
@@ -112,7 +113,7 @@ describe('auth gate', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    expect(await screen.findByText('RetinaSense screening console')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Clinical review' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
     expect(await screen.findByRole('heading', { level: 1, name: /Smarter retinal screening/i })).toBeInTheDocument();
@@ -127,10 +128,13 @@ describe('role-based access', () => {
 
     render(<App />);
 
+    // The operator is sent to their own operations dashboard, which has no
+    // review controls.
     expect(
-      await screen.findByText('RetinaSense screening console'),
+      await screen.findByRole('heading', { name: 'Screening operations' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Review queue' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Review queue' })).not.toBeInTheDocument();
   });
 
   it('lets an ophthalmologist open the review queue', async () => {

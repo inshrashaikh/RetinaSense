@@ -52,3 +52,13 @@ export function isAwaitingReview(c: CaseListItem): boolean {
 export function isRecaptureRequired(c: CaseListItem): boolean {
   return c.status === 'recapture_required';
 }
+
+/** A registered case whose fundus image has not been screened yet. */
+export function isAwaitingScreening(c: CaseListItem): boolean {
+  return c.status === 'created';
+}
+
+/** A case with a recorded human decision. */
+export function isReviewed(c: CaseListItem): boolean {
+  return c.status === 'reviewed';
+}

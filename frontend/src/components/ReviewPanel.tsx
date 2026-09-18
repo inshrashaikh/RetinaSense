@@ -109,56 +109,56 @@ export function ReviewPanel({ caseId, ai, onSubmitted, onError }: Props) {
         </div>
 
         <form className="form" onSubmit={onSubmit} aria-label="Human review form">
-            <fieldset className="fieldset">
-              <legend className="fieldset__legend">Action</legend>
-              {ACTIONS.map((option) => (
-                <label className="radio-line" key={option.value}>
-                  <input
-                    type="radio"
-                    name="action"
-                    value={option.value}
-                    aria-label={option.label}
-                    checked={action === option.value}
-                    onChange={() => setAction(option.value)}
-                  />
-                  <span className="radio-line__text">
-                    <span>{option.label}</span>
-                    <span className="radio-line__hint">{option.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+          <fieldset className="fieldset">
+            <legend className="fieldset__legend">Action</legend>
+            {ACTIONS.map((option) => (
+              <label className="radio-line" key={option.value}>
+                <input
+                  type="radio"
+                  name="action"
+                  value={option.value}
+                  aria-label={option.label}
+                  checked={action === option.value}
+                  onChange={() => setAction(option.value)}
+                />
+                <span className="radio-line__text">
+                  <span>{option.label}</span>
+                  <span className="radio-line__hint">{option.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
 
-            {action === 'override' && (
-              <Field label="Override DR grade">
-                <Select
-                  value={overrideGrade}
-                  onChange={(e) => setOverrideGrade(Number(e.target.value))}
-                >
-                  {[0, 1, 2, 3, 4].map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            )}
+          {action === 'override' && (
+            <Field label="Override DR grade">
+              <Select
+                value={overrideGrade}
+                onChange={(e) => setOverrideGrade(Number(e.target.value))}
+              >
+                {[0, 1, 2, 3, 4].map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
 
-<Field label="Notes">
-          <Textarea
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional notes…"
-          />
-        </Field>
+          <Field label="Notes">
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes…"
+            />
+          </Field>
 
-        <div className="btn-row">
-          <Button type="submit" variant="primary" icon="check" loading={busy}>
-            {busy ? 'Submitting review…' : 'Submit review'}
-          </Button>
-        </div>
-      </form>
+          <div className="btn-row">
+            <Button type="submit" variant="primary" icon="check" loading={busy}>
+              {busy ? 'Submitting review…' : 'Submit review'}
+            </Button>
+          </div>
+        </form>
       </CardBody>
     </Card>
   );

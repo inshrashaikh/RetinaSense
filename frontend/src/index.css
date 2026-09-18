@@ -1210,6 +1210,7 @@ input[type="file"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--rs-space-4);
   padding: var(--rs-space-4) 0;
   border-bottom: 1px solid var(--rs-border-soft);
@@ -1237,6 +1238,38 @@ input[type="file"] {
   flex-wrap: wrap;
   font-size: var(--rs-text-sm);
   color: var(--rs-muted);
+}
+
+/*
+ * Opaque case ids and patient tokens can be long; wrap them rather than
+ * letting them push the action button out of its cell or list row.
+ */
+.table__cell-strong,
+.data-list__title {
+  overflow-wrap: anywhere;
+}
+
+/* A secondary line under a strong table cell (e.g. eye · created). */
+.table__cell-note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--rs-text-xs);
+  font-weight: 500;
+  color: var(--rs-muted);
+  white-space: normal;
+}
+
+/* Dashboard AI brief + flag cells: wrap instead of overlapping the buttons. */
+.ai-brief,
+.flag-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rs-space-2);
+}
+
+.ai-brief strong {
+  color: var(--rs-heading);
 }
 
 .link-btn {

@@ -20,6 +20,18 @@ export interface UserInfo {
 const TOKEN_KEY = 'retinasense_token';
 const USER_KEY = 'retinasense_user';
 
+/** Human-readable role names used in navigation and the account chip. */
+export const ROLE_LABELS: Record<Role, string> = {
+  phc_operator: 'PHC operator',
+  ophthalmologist: 'Ophthalmologist',
+  admin: 'Administrator',
+};
+
+export function roleLabel(role: Role | undefined | null): string {
+  if (!role) return 'Signed out';
+  return ROLE_LABELS[role] ?? role;
+}
+
 export function getToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);

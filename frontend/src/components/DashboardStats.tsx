@@ -3,9 +3,9 @@
  * overview. Counts come from GET /api/cases/stats; when the backend is
  * unreachable the cards say so instead of showing zeros.
  */
-import { Fragment, useEffect, useState } from 'react';
-import { fetchCaseStats, fetchHealth } from '../api/endpoints';
-import type { CaseStats, HealthResponse } from '../api/types';
+import { Fragment } from 'react';
+import type { CaseStats } from '../api/types';
+import { useStats } from '../hooks/useStats';
 import { BackendHealthChip } from './BackendHealthChip';
 import { Alert } from './ui/Alert';
 import { Card, CardBody, CardHeader } from './ui/Card';
@@ -13,8 +13,6 @@ import { SkeletonStatGrid } from './ui/Skeleton';
 import { StatCard, type StatTone } from './ui/StatCard';
 import type { IconName } from './ui/Icon';
 import { Icon } from './ui/Icon';
-
-type StatsState = 'loading' | 'done' | 'unreachable';
 
 const METRICS: {
   key: keyof CaseStats;
@@ -34,26 +32,7 @@ const METRICS: {
 const WORKFLOW_STEPS = ['Quality gate', 'AI grading', 'Human review'];
 
 export function DashboardStats() {
-  const [stats, setStats] = useState<CaseStats | null>(null);
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [state, setState] = useState<StatsState>('loading');
-
-  useEffect(() => {
-    let alive = true;
-    Promise.all([fetchCaseStats(), fetchHealth()])
-      .then(([s, h]) => {
-        if (!alive) return;
-        setStats(s);
-        setHealth(h);
-        setState('done');
-      })
-      .catch(() => {
-        if (alive) setState('unreachable');
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const { state, stats, health } = useStats();
 
   if (state === 'loading') {
     return (

@@ -1,42 +1,33 @@
 /**
- * Dashboard — the clinical command centre.
+ * DashboardPage — role dispatcher.
  *
- * Everything on this page is derived from the backend: case counts from
- * GET /api/cases/stats, worklists from GET /api/cases, engine state from
- * GET /api/health.
+ * Signed-in users land on a dashboard tailored to what their role can do:
+ *   * phc_operator   → capture/screening operations (no review controls)
+ *   * ophthalmologist → clinical review with AI briefs
+ *   * admin           → system monitoring
+ *
+ * With no role (DEMO mode or an unknown session) it falls back to the generic
+ * console. Dispatching on the client is a UX concern only — the backend still
+ * enforces every role on each request.
  */
-import { DashboardCases } from '../components/DashboardCases';
-import { DashboardStats } from '../components/DashboardStats';
-import { DemoScenarioSelect } from '../components/DemoScenarioSelect';
-import { Button } from '../components/ui/Button';
-import { PageHeader } from '../components/ui/PageHeader';
-import { navigate } from '../router';
+import { getUser } from '../auth/session';
+import { AdminDashboard } from './dashboards/AdminDashboard';
+import { DoctorDashboard } from './dashboards/DoctorDashboard';
+import { OperatorDashboard } from './dashboards/OperatorDashboard';
+import { ScreeningConsole } from './dashboards/ScreeningConsole';
 
 export function DashboardPage({ demoMode }: { demoMode: boolean }) {
-  return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Clinical console"
-        title="RetinaSense screening console"
-        subtitle="AI-assisted diabetic retinopathy screening with a human-in-the-loop final
-          decision. Upload a fundus image, run the deterministic quality gate and AI
-          grading, then review the case before any referral is recorded."
-        actions={
-          <>
-            <Button icon="layers" onClick={() => navigate('/cases')}>
-              Browse cases
-            </Button>
-            <Button variant="primary" size="lg" icon="plus" onClick={() => navigate('/screening')}>
-              New screening
-            </Button>
-          </>
-        }
-      />
+  const user = demoMode ? null : getUser();
+  const role = user?.role;
 
-      {demoMode && <DemoScenarioSelect />}
-
-      <DashboardStats />
-      <DashboardCases />
-    </div>
-  );
+  switch (role) {
+    case 'phc_operator':
+      return <OperatorDashboard />;
+    case 'ophthalmologist':
+      return <DoctorDashboard />;
+    case 'admin':
+      return <AdminDashboard />;
+    default:
+      return <ScreeningConsole demoMode={demoMode} />;
+  }
 }

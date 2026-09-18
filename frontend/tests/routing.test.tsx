@@ -39,6 +39,10 @@ vi.mock('../src/auth/session', () => ({
   getUser: () => ({ id: 1, username: 'doctor', name: 'Dr. Test', role: 'ophthalmologist' }),
   isAuthenticated: () => true,
   canReview: (role?: string) => role === 'ophthalmologist' || role === 'admin',
+  roleLabel: (role?: string) =>
+    ({ phc_operator: 'PHC operator', ophthalmologist: 'Ophthalmologist', admin: 'Administrator' })[
+      role ?? ''
+    ] ?? 'Signed out',
   saveSession: vi.fn(),
   clearSession: vi.fn(),
   subscribeAuth: () => () => {},
@@ -89,7 +93,8 @@ describe('App routing', () => {
     window.location.hash = '#/dashboard';
     render(<App />);
 
-    expect(screen.getByText('RetinaSense screening console')).toBeInTheDocument();
+    // The mocked session is an ophthalmologist, so the doctor dashboard renders.
+    expect(screen.getByRole('heading', { name: 'Clinical review' })).toBeInTheDocument();
     // The shell — not the landing navbar — wraps application pages.
     expect(screen.getByRole('navigation', { name: 'Application navigation' })).toBeInTheDocument();
     expect(await screen.findByText('Recent cases')).toBeInTheDocument();
