@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   fetchHealth: vi.fn(),
   fetchCaseStats: vi.fn(),
   generateReport: vi.fn(),
+  fetchSimulationCapacity: vi.fn(),
 }));
 
 vi.mock('../src/api/endpoints', () => ({
@@ -31,6 +32,7 @@ vi.mock('../src/api/endpoints', () => ({
   fetchHealth: api.fetchHealth,
   fetchCaseStats: api.fetchCaseStats,
   generateReport: api.generateReport,
+  fetchSimulationCapacity: api.fetchSimulationCapacity,
 }));
 
 import App from '../src/App';
@@ -71,6 +73,74 @@ const COMPLETED_CASE = {
   finalDecision: null,
 };
 
+/**
+ * A sample of the real GET /api/simulation/capacity shape (mirrors
+ * simulate the persisted MEASURED results JSON contract).
+ */
+const SIM_CAPACITY = {
+  available: true,
+  latest: {
+    generatedAt: '2026-09-17 18:04:41',
+    matlabVersion: 'R2026a',
+    simulinkVersion: 'R2026a',
+    simEventsVersion: 'R2026a',
+    modelFile: 'DRTelemedicine.slx',
+    dataSourcePolicy: 'MEASURED: real SimEvents block statistics',
+    results: [
+      {
+        scenario: 'baseline',
+        executionStatus: 'SUCCESS',
+        measurementWindow: 'FULL_WORKDAY',
+        patientsPerDay: 274,
+        bandwidthMbps: 2.0,
+        numReviewers: 2,
+        simTimeHours: 8,
+        completedPatients: 143,
+        throughput: 143.0,
+        annualCapacity: 52195,
+        averageWaitingTime: 5225.2,
+        meanWaitingTime: 1845.7,
+        maxWaitingTime: 5537.1,
+        queueLength: 36.8,
+        acqUtilization: 0.976,
+        networkUtilization: 0.21,
+        aiUtilization: 0.35,
+        revUtilization: 0.054,
+        reviewerUtilization: 0.054,
+        bottleneck: 'Acquisition',
+      },
+      {
+        scenario: 'solo_reviewer',
+        executionStatus: 'PENDING',
+        measurementWindow: '',
+        patientsPerDay: 274,
+        bandwidthMbps: 2.0,
+        numReviewers: 1,
+        simTimeHours: 8,
+        completedPatients: null,
+        throughput: null,
+        annualCapacity: null,
+        averageWaitingTime: null,
+        meanWaitingTime: null,
+        maxWaitingTime: null,
+        queueLength: null,
+        acqUtilization: null,
+        networkUtilization: null,
+        aiUtilization: null,
+        revUtilization: null,
+        reviewerUtilization: null,
+        bottleneck: 'PENDING',
+      },
+    ],
+  },
+  runs: [],
+  target: {
+    annualPatients: 100_000,
+    dailyEquivalent: 274,
+    note: 'Reference target from the SIH 2026 problem statement.',
+  },
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
@@ -80,6 +150,7 @@ beforeEach(() => {
   api.fetchCaseStats.mockResolvedValue(STATS);
   api.listCases.mockResolvedValue(CASE_ITEMS);
   api.getCase.mockResolvedValue(COMPLETED_CASE);
+  api.fetchSimulationCapacity.mockResolvedValue(SIM_CAPACITY);
 });
 
 describe('dashboard role dispatch', () => {
@@ -120,17 +191,42 @@ describe('dashboard role dispatch', () => {
     expect(screen.getByText('Grad-CAM')).toBeInTheDocument();
   });
 
-  it('renders the administrator monitoring dashboard with honest gaps', async () => {
-    saveSession('token', { id: 3, username: 'admin', name: 'Admin User', role: 'admin' });
+  it('renders the district operations dashboard with measured capacity', async () => {
+    saveSession('token', { id: 3, username: 'admin', name: 'District Admin', role: 'admin' });
     window.location.hash = '#/dashboard';
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'System administration' })).toBeInTheDocument();
-    expect(screen.getByText('System health')).toBeInTheDocument();
-    expect(screen.getByText('Case-store overview')).toBeInTheDocument();
-    expect(screen.getByText('Operational backlog')).toBeInTheDocument();
-    // Missing backend capabilities are stated, not faked.
-    expect(screen.getByText(/does not provide user\/role management/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Capacity & district operations' })).toBeInTheDocument();
+    expect(screen.getByText('District telemedicine workflow')).toBeInTheDocument();
+    expect(screen.getByText('Measured baseline capacity')).toBeInTheDocument();
+    expect(screen.getByText('Scenario comparison')).toBeInTheDocument();
+
+    // Measured baseline figures are shown (from the mocked simulation result).
+    expect(screen.getAllByText('143/day').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('52,195').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Acquisition').length).toBeGreaterThan(0);
+
+    // The 100k target is separated and never presented as measured.
+    expect(screen.getByText(/100,000 patients\/year is a reference target/i)).toBeInTheDocument();
+
+    // PENDING scenarios are never rendered as numbers.
+    expect(screen.queryByText('solo_reviewer')).toBeNull();
+  });
+
+  it('reports honestly when no measured simulation results exist', async () => {
+    api.fetchSimulationCapacity.mockResolvedValue({
+      available: false,
+      latest: null,
+      runs: [],
+      target: { annualPatients: 100_000, dailyEquivalent: 274, note: 'Ref' },
+    });
+    saveSession('token', { id: 3, username: 'admin', name: 'District Admin', role: 'admin' });
+    window.location.hash = '#/dashboard';
+    render(<App />);
+
+    expect(await screen.findByText(/No measured simulation results yet/i)).toBeInTheDocument();
+    // No fabricated figure is rendered.
+    expect(screen.queryByText('143/day')).not.toBeInTheDocument();
   });
 });
 

@@ -2671,6 +2671,31 @@ input[type="file"] {
   display: inline-flex;
 }
 
+/* Utilization bar in the district simulation resource rows. */
+.util-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rs-space-3);
+}
+
+.util-bar {
+  display: inline-flex;
+  width: 120px;
+  height: 8px;
+  border-radius: var(--rs-radius-pill);
+  background: var(--rs-bg-subtle);
+  border: 1px solid var(--rs-border-soft);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.util-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--rs-primary);
+  border-radius: var(--rs-radius-pill);
+}
+
 /* --------------------------------------------------------------------------
    19. Quality / recapture blocks
    -------------------------------------------------------------------------- */
