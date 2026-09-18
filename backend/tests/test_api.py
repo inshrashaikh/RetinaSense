@@ -247,6 +247,46 @@ def test_ungradable_state():
     assert resp.json()["quality"]["class"] == "ungradable"
 
 
+def test_screen_route_returns_enhancement_recapture(monkeypatch):
+    """A real enhancement recheck may retain class=borderline but request recapture."""
+    class EnhancementRecaptureAdapter:
+        def run_pipeline(self, image_path, metadata):
+            return {
+                "quality": {
+                    "class": "borderline",
+                    "score": 0.45,
+                    "failureReasons": ["focus"],
+                    "recaptureReason": "LOW_FOCUS",
+                    "recaptureInstruction": "Please recapture with better focus.",
+                },
+                "grading": None,
+                "calibrated": None,
+                "explain": None,
+                "review": None,
+            }
+
+    import app.services.matlab_adapter as matlab_adapter
+
+    monkeypatch.setattr(
+        matlab_adapter,
+        "default_adapter",
+        lambda: EnhancementRecaptureAdapter(),
+    )
+    case_id = _create_case()
+    resp = client.post(
+        f"/api/cases/{case_id}/screen",
+        files={"image": ("blurred.jpg", b"\xff\xd8" + b"\x00" * 98, "image/jpeg")},
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "recapture_required"
+    assert body["quality"]["class"] == "borderline"
+    assert body["quality"]["recaptureReason"] == "LOW_FOCUS"
+    assert body["quality"]["recaptureInstruction"] == "Please recapture with better focus."
+    assert body["aiPrediction"]["grade"] is None
+
+
 # ─── 9. Successful structured result (test adapter) ──────────────────────
 
 def test_successful_screening():

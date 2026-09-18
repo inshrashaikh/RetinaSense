@@ -4,7 +4,7 @@
  * - Base URL: VITE_API_BASE_URL. In the dev setup this is left EMPTY so the
  *   browser calls '/api/...' same-origin (localhost:5173) and the Vite dev
  *   server proxies to the backend (vite.config.ts) — no CORS or host
- *   mismatches. When unset it defaults to http://127.0.0.1:8000.
+ *   mismatches. When set for a direct connection, use http://localhost:8000.
  * - Every request aborts after a timeout (timeoutMs).
  * - Errors are normalised into ApiError with a stable `code` and a `kind`
  *   (http | network | timeout | malformed) so the UI can show honest,

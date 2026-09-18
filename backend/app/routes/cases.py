@@ -228,5 +228,5 @@ def get_report_pdf(caseId: str, _user: CurrentUser) -> FileResponse:
     return FileResponse(
         path,
         media_type="application/pdf",
-        filename=path.name,
+        filename=f"RetinaSense-report-{caseId}.pdf",
     )

@@ -20,7 +20,7 @@ print(f"2. Case created: {case_id}")
 # 3. Screen - MATLAB engine first call starts matlab.engine session (~30-60s)
 print("3. Running MATLAB pipeline via real engine (allow up to 5 min)...")
 t0 = time.time()
-with open(r"D:\Projects\RetinaSense\assets\synthetic_fundus_demo.png", "rb") as f:
+with open(r"D:\Project\RetinaSense\assets\synthetic_fundus_demo.png", "rb") as f:
     r = requests.post(
         f"{BASE}/api/cases/{case_id}/screen",
         headers=headers,

@@ -64,8 +64,8 @@ function ArtifactFigure({ caseId, name }: { caseId: string; name: string }) {
   if (state === 'done' && src) {
     return (
       <figure className="artifact-figure" role="img" aria-label="Model attention map">
-        <img src={src} alt="Model attention map (Grad-CAM). Not proof of causality." />
-        <figcaption>Model attention — not proof of causality.</figcaption>
+        <img src={src} alt="Grad-CAM — Model Attention Map" />
+        <figcaption>Grad-CAM — Model Attention Map</figcaption>
       </figure>
     );
   }
@@ -117,7 +117,7 @@ export function ExplainabilityPanel({ caseId, explain }: { caseId: string; expla
           <ul className="plain-list">
             {explain.gradCamAvailable && gradCamName && (
               <li>
-                <strong>Grad-CAM attention</strong> —{' '}
+                <strong>Grad-CAM — Model Attention Map</strong> —{' '}
                 <ArtifactFigure caseId={caseId} name={gradCamName} />
               </li>
             )}
@@ -130,9 +130,9 @@ export function ExplainabilityPanel({ caseId, explain }: { caseId: string; expla
           </ul>
         )}
         <p className="note-text">
-          Grad-CAM represents model attention — not proof of causality. Artifact
-          PNGs are served by the backend artifact endpoint and are shown only
-          when the pipeline produced them.
+          Not proof of causality; supports clinician review. Artifact PNGs are
+          served by the backend artifact endpoint and are shown only when the
+          pipeline produced them.
         </p>
       </CardBody>
     </Card>

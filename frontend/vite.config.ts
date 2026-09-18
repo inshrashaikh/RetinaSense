@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 // Backend that Vite proxies /api to. Matches the default in client.ts.
-const PROXY_TARGET = process.env.VITE_PROXY_TARGET ?? 'http://127.0.0.1:8000';
+const PROXY_TARGET = process.env.VITE_PROXY_TARGET ?? 'http://localhost:8000';
 
 export default defineConfig({
   plugins: [react()],

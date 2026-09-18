@@ -41,7 +41,7 @@ npm run typecheck      # tsc --noEmit
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | Backend API root. |
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Backend API root. |
 | `VITE_DEMO_MODE` | unset | `true` → route everything through the DEMO client and show a persistent DEMO banner. |
 
 Example: `VITE_DEMO_MODE=true npm run dev`

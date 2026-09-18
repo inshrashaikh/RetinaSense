@@ -45,7 +45,7 @@ describe('ExplainabilityPanel', () => {
     render(<ExplainabilityPanel caseId="RS-X1" explain={withGradCam} />);
 
     const figureImg = await screen.findByRole('img', {
-      name: 'Model attention map (Grad-CAM). Not proof of causality.',
+      name: 'Grad-CAM — Model Attention Map',
     });
     expect(figureImg).toBeInTheDocument();
     // setup.ts polyfills URL.createObjectURL → 'blob:mock-preview'.

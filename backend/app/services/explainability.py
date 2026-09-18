@@ -212,9 +212,11 @@ def compute_explain(
     """Compute real Grad-CAM attention for the actual uploaded image.
 
     *image* may be an HxWx3 RGB ndarray or a path to an image file (the
-    screening service hands over the stored image path).  If the model/torch
-    is unavailable or the image is not decodable this returns None (screening
-    then reports honest-empty explainability).  It NEVER fabricates attention.
+    screening service hands over the stored image path). The heatmap is
+    generated for the model's actual predicted class on this image, not the
+    referable aggregate decision. If the model/torch is unavailable or the
+    image is not decodable this returns None (screening then reports
+    honest-empty explainability). It NEVER fabricates attention.
 
     Returns (mirror of computeGradCAM.m contract):
       attentionImage  HxWx3 uint8
@@ -232,29 +234,33 @@ def compute_explain(
         import torch
 
         x = _to_rgb(rgb).unsqueeze(0)
-        gcam = _GradCAM(model, _anchor_layer(model))
-        referCam, _ = gcam(x, "referable")
+        with torch.no_grad():
+            logits = model(x)
+        pred_idx = int(torch.argmax(logits[0]).item())
 
-        if referCam is None:
+        gcam = _GradCAM(model, _anchor_layer(model))
+        grad_cam, _ = gcam(x, pred_idx)
+
+        if grad_cam is None:
             _logger.warning("explainability: no Grad-CAM produced — attention stays honest-empty")
             return None
 
         H, W = rgb.shape[:2]
-        referCam = _resize_cam(referCam, (W, H))
+        grad_cam = _resize_cam(grad_cam, (W, H))
 
         # Honest mirror of computeGradCAM.m (attention only when the cam
         # carries real content): a degenerate all-zero map means the model
         # found nothing to attend to. Rendering it would paint a flat dark
         # wash over the fundus AND still be served as "available" — neither is
         # honest, so it is treated exactly like "no attention".
-        if not _has_attention_content(referCam):
+        if not _has_attention_content(grad_cam):
             _logger.info(
                 "explainability: degenerate (all-zero) Grad-CAM for %s — leaving honest-empty",
                 _src_name(image),
             )
             return None
 
-        attention = _overlay_cam(rgb, referCam)
+        attention = _overlay_cam(rgb, grad_cam)
         evidence = _evidence_overlay(rgb)
 
         return {

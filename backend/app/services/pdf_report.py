@@ -72,7 +72,10 @@ def _image_path(case_id: str) -> Path | None:
     return path if path is not None else None
 
 
-def _artifact_path(case_id: str, name: str) -> Path | None:
+def _artifact_path(case_id: str, name: str, explainability: dict) -> Path | None:
+    available_key = "gradCamAvailable" if name == "gradcam" else "evidenceAvailable"
+    if not explainability.get(available_key):
+        return None
     path = _ARTIFACTS_DIR / case_id / f"{name}.png"
     return path if path.is_file() else None
 
@@ -147,6 +150,7 @@ def build_report_pdf(case_id: str) -> Path:
         ("Patient ID", meta.get("patientId") or "—"),
         ("Eye", meta.get("eye") or "—"),
         ("PHC", meta.get("phcId") or "—"),
+        ("Screening date/time", screening.get("createdAt") or "—"),
         ("Status", screening.get("status", "created")),
     ]
     case_tbl = Table([[Paragraph(_render_html_field(r), body)] for r in case_rows], colWidths=[16.5 * cm])
@@ -194,26 +198,28 @@ def build_report_pdf(case_id: str) -> Path:
             img_cols.append(Image(str(img_path), width=7.5 * cm, height=7.5 * cm))
         except Exception:
             img_cols.append(Paragraph("<i>Fundus image unavailable for embedding.</i>", body))
-        gcam_path = _artifact_path(case_id, "gradcam")
-        if gcam_path is not None:
+        for artifact_name in ("gradcam", "evidence"):
+            artifact_path = _artifact_path(case_id, artifact_name, explain)
+            if artifact_path is None:
+                continue
             try:
-                with PILImage.open(str(gcam_path)) as _im:
+                with PILImage.open(str(artifact_path)) as _im:
                     _im.load()
-                img_cols.append(Image(str(gcam_path), width=7.5 * cm, height=7.5 * cm))
+                img_cols.append(Image(str(artifact_path), width=5.2 * cm, height=5.2 * cm))
             except Exception:
                 pass
         if len(img_cols) == 1:
             story.append(img_cols[0])
         else:
-            img_tbl = Table([img_cols], colWidths=[8.0 * cm, 8.0 * cm])
+            img_tbl = Table([img_cols], colWidths=[5.5 * cm] * len(img_cols))
             img_tbl.setStyle(TableStyle([
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]))
             story.append(img_tbl)
         story.append(Paragraph(
-            "<small>Left: fundus photo. Right: Grad-CAM attention on the referable "
-            "decision. Model attention — not proof of causality.</small>",
+            "<small>Images: fundus photo; model Grad-CAM attention when available; "
+            "retinal evidence overlay when produced. Model attention — not proof of causality.</small>",
             small_style,
         ))
         story.append(Spacer(1, 0.3 * cm))

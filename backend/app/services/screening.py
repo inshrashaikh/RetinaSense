@@ -156,6 +156,9 @@ def run_screening(
     # Quality gate: early exit for ungradable
     quality_data = result.get("quality", {})
     quality_class = quality_data.get("class", "")
+    recapture_required = quality_class == "ungradable" or bool(
+        quality_data.get("recaptureReason") or quality_data.get("recaptureInstruction")
+    )
 
     screening: dict[str, Any] = {
         "quality": quality_data,
@@ -169,7 +172,7 @@ def run_screening(
     # an honest null, matching the adapter's own NaN policy.
     screening = _clean_json_floats(screening)
 
-    if quality_class == "ungradable":
+    if recapture_required:
         screening["status"] = "recapture_required"
         database_store.save_screening(case_id, screening)
         return screening
@@ -177,6 +180,26 @@ def run_screening(
     grading_data = result.get("grading")
     calibrated_data = result.get("calibrated")
     explain_data = result.get("explain")
+
+    # Do not silently default to "No DR" or a made-up grade when the model
+    # returns incomplete output. A non-ungradable image must include both an
+    # actual grade and calibrated confidence; otherwise the result is rejected
+    # as a real error rather than a fabricated medical outcome.
+    if quality_class != "ungradable":
+        if not grading_data or grading_data.get("grade") is None:
+            raise RetinaSenseError(
+                ErrorCode.INTERNAL_ERROR,
+                "The real screening model did not return a valid DR grade for this image. "
+                "No fabricated 'No DR' fallback is allowed.",
+                stage="screening",
+            )
+        if not calibrated_data or calibrated_data.get("confidence") is None:
+            raise RetinaSenseError(
+                ErrorCode.INTERNAL_ERROR,
+                "The real screening model did not return calibrated confidence for this image. "
+                "No fabricated medical result is allowed.",
+                stage="screening",
+            )
 
     # Build AI prediction (never fabricated — only from adapter output)
     if grading_data and calibrated_data:

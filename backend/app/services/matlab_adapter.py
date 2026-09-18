@@ -118,7 +118,16 @@ class MatlabAdapter(BaseMatlabAdapter):
         image_path: str,
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
+        # Check the production dependency first so an unavailable MATLAB
+        # engine is never masked by a secondary image-path error.
         eng = self._ensure_engine()
+        if not image_path or not os.path.exists(image_path):
+            raise RetinaSenseError(
+                ErrorCode.IMAGE_UNAVAILABLE,
+                f"The uploaded fundus image was not found on disk: {image_path!r}",
+                stage="matlab_adapter",
+            )
+
         with _ENGINE_LOCK:  # MATLAB engine calls are not thread-safe
             try:
                 # mock flag for runPipeline: real screening by default.

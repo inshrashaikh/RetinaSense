@@ -87,6 +87,7 @@ def load_screening(case_id: str) -> dict[str, Any] | None:
             "quality": row.quality if row.quality is not None else {},
             "aiPrediction": row.ai_prediction,
             "explainability": row.explainability,
+            "createdAt": row.created_at,
         }
 
 

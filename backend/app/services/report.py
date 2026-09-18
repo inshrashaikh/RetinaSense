@@ -142,6 +142,7 @@ def generate_report(case_id: str) -> dict[str, Any]:
     report_payload: dict[str, Any] = {
         "caseId": case_id,
         "status": screening.get("status", "created"),
+        "screeningAt": screening.get("createdAt"),
         "patientId": meta.get("patientId", ""),
         "eye": meta.get("eye", ""),
         "phcId": meta.get("phcId", ""),
