@@ -151,6 +151,73 @@ export interface ReportResponse {
   disclaimer: string | null;
 }
 
+// ---------- Simulink district capacity (GET /api/simulation/capacity) ----------
+// Mirrors simulink/run_simulink_scenarios.m persisted JSON. Measured fields
+// come from real SimEvents block statistics; null means "not measured", never
+// a zero.
+
+export interface ScenarioResult {
+  scenario: string;
+  executionStatus: string | null;
+  measurementWindow: string | null;
+  patientsPerDay: number | null;
+  bandwidthMbps: number | null;
+  numReviewers: number | null;
+  simTimeHours: number | null;
+  completedPatients: number | null;
+  throughput: number | null;
+  annualCapacity: number | null;
+  averageWaitingTime: number | null;
+  meanWaitingTime: number | null;
+  maxWaitingTime: number | null;
+  queueLength: number | null;
+  acqUtilization: number | null;
+  networkUtilization: number | null;
+  aiUtilization: number | null;
+  revUtilization: number | null;
+  reviewerUtilization: number | null;
+  bottleneck: string | null;
+}
+
+export interface SimulationRunPayload {
+  generatedAt: string | null;
+  matlabVersion: string | null;
+  simulinkVersion: string | null;
+  simEventsVersion: string | null;
+  modelFile: string | null;
+  dataSourcePolicy: string | null;
+  results: ScenarioResult[];
+}
+
+export interface SimulationRunInfo {
+  file: string;
+  generatedAt: string | null;
+  results: ScenarioResult[];
+}
+
+export interface CapacityTarget {
+  annualPatients: number;
+  dailyEquivalent: number;
+  note: string;
+}
+
+export interface SimulationCapacityResponse {
+  available: boolean;
+  latest: SimulationRunPayload | null;
+  runs: SimulationRunInfo[];
+  target: CapacityTarget;
+}
+
+/** True only when a scenario actually ran (PENDING/FAILED are not numbers). */
+export function isMeasured(result: ScenarioResult): boolean {
+  return (
+    result.executionStatus === 'SUCCESS' &&
+    result.throughput !== null &&
+    result.throughput !== undefined &&
+    Number.isFinite(result.throughput)
+  );
+}
+
 /** Grade 0–4 human-readable labels (matches config GRADE_LABELS). */
 export const GRADE_LABELS: Record<number, string> = {
   0: 'No DR',

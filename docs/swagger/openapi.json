@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "RetinaSense Backend",
-    "description": "REST API for the RetinaSense diabetic retinopathy screening system. Bridges the web frontend to the MATLAB AI engine.\n\n## How to run\n1. Start the backend:  `cd backend && RETINASENSE_SIMULATION=mock ../.venv/bin/uvicorn app.main:app --port 8000`\n2. Default base URL: `http://127.0.0.1:8000` (CORS allows the Vite dev/preview origins).\n\n## Screening flow (collection runner order)\n`POST /api/cases` -> `POST /api/cases/{caseId}/screen` (multipart image upload) -> `GET /api/cases/{caseId}` -> `POST /api/cases/{caseId}/report` -> `POST /api/cases/{caseId}/review` -> `POST /api/cases/{caseId}/report` (regenerate with the review) -> `GET /api/cases` and `GET /api/cases/{caseId}/image`.\n\n## Modes\n- Default: real `MatlabAdapter` -> raises **503 MATLAB_ENGINE_UNAVAILABLE** until MATLAB + trained artifacts exist on the host.\n- `RETINASENSE_SIMULATION=mock`: uses the clearly-labelled demo adapter so the whole flow works without MATLAB. Mock output is never clinical.",
-    "version": "0.1.0-prototype"
+    "description": "REST API for the RetinaSense diabetic retinopathy screening system. Bridges the web frontend to the MATLAB AI engine.\n\n## How to run\n1. Start the backend:  \\cd backend && RETINASENSE_SIMULATION=mock ../.venv/bin/uvicorn app.main:app --port 80002. Default base URL: \\http://127.0.0.1:8000\\ (CORS allows the Vite dev/preview origins).\n\n## Screening flow (collection runner order)\n\\POST /api/cases\\ -> \\POST /api/cases/{caseId}/screen\\ (multipart image upload) -> \\GET /api/cases/{caseId}\\ -> \\POST /api/cases/{caseId}/report\\ -> \\POST /api/cases/{caseId}/review\\ -> \\POST /api/cases/{caseId}/report\\ (regenerate with the review) -> \\GET /api/cases\\ and \\GET /api/cases/{caseId}/image\\.\n\n## Simulation endpoint\n\\GET /api/simulation/capacity\\ (admin-only): newest measured Simulink run from \\simulink/output/district_capacity_results_*.json\\; \\\u0007vailable: false\\ when no run exists.\n\n## Modes\n- Default: real \\MatlabAdapter\\ -> raises **503 MATLAB_ENGINE_UNAVAILABLE** until MATLAB + trained artifacts exist on the host.\n- \\RETINASENSE_SIMULATION=mock\\: uses the clearly-labelled demo adapter so the whole flow works without MATLAB. Mock output is never clinical.",
+    "version": "0.2.0-prototype"
   },
   "paths": {
     "/": {
@@ -47,6 +47,67 @@
         }
       }
     },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Me",
+        "operationId": "me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInfo"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/cases": {
       "get": {
         "summary": "List Cases",
@@ -66,7 +127,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       },
       "post": {
         "summary": "Create Case",
@@ -101,7 +167,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/cases/stats": {
@@ -119,13 +190,23 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/cases/{caseId}/screen": {
       "post": {
         "summary": "Screen Case",
         "operationId": "screen_case_api_cases__caseId__screen_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "caseId",
@@ -175,6 +256,11 @@
       "get": {
         "summary": "Get Case",
         "operationId": "get_case_api_cases__caseId__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "caseId",
@@ -214,6 +300,11 @@
       "post": {
         "summary": "Review Case",
         "operationId": "review_case_api_cases__caseId__review_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "caseId",
@@ -263,6 +354,11 @@
       "get": {
         "summary": "Get Report",
         "operationId": "get_report_api_cases__caseId__report_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "caseId",
@@ -300,6 +396,11 @@
       "post": {
         "summary": "Generate Report",
         "operationId": "generate_report_api_cases__caseId__report_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "caseId",
@@ -339,6 +440,11 @@
       "get": {
         "summary": "Get Case Image",
         "operationId": "get_case_image_api_cases__caseId__image_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "caseId",
@@ -371,6 +477,122 @@
           }
         }
       }
+    },
+    "/api/cases/{caseId}/artifacts/{name}": {
+      "get": {
+        "summary": "Get Case Artifact",
+        "operationId": "get_case_artifact_api_cases__caseId__artifacts__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cases/{caseId}/report/pdf": {
+      "get": {
+        "summary": "Get Report Pdf",
+        "operationId": "get_report_pdf_api_cases__caseId__report_pdf_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Caseid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/simulation/capacity": {
+      "get": {
+        "summary": "Simulation Capacity",
+        "operationId": "simulation_capacity_api_simulation_capacity_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulationCapacityResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -398,6 +620,20 @@
               }
             ],
             "title": "Gradelabel"
+          },
+          "probabilities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probabilities"
           },
           "referable": {
             "anyOf": [
@@ -472,7 +708,7 @@
         "properties": {
           "image": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "Image"
           },
           "patientId": {
@@ -496,6 +732,29 @@
           "image"
         ],
         "title": "Body_screen_case_api_cases__caseId__screen_post"
+      },
+      "CapacityTarget": {
+        "properties": {
+          "annualPatients": {
+            "type": "integer",
+            "title": "Annualpatients"
+          },
+          "dailyEquivalent": {
+            "type": "number",
+            "title": "Dailyequivalent"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annualPatients",
+          "dailyEquivalent",
+          "note"
+        ],
+        "title": "CapacityTarget"
       },
       "CaseListItem": {
         "properties": {
@@ -846,6 +1105,41 @@
         "type": "object",
         "title": "HumanReview"
       },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserInfo"
+          },
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "token"
+        ],
+        "title": "LoginResponse"
+      },
       "QualityResult": {
         "properties": {
           "class": {
@@ -1022,6 +1316,400 @@
         ],
         "title": "ReviewResponse"
       },
+      "ScenarioResult": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "executionStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executionstatus"
+          },
+          "measurementWindow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measurementwindow"
+          },
+          "patientsPerDay": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patientsperday"
+          },
+          "bandwidthMbps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidthmbps"
+          },
+          "numReviewers": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numreviewers"
+          },
+          "simTimeHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simtimehours"
+          },
+          "completedPatients": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedpatients"
+          },
+          "throughput": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Throughput"
+          },
+          "annualCapacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annualcapacity"
+          },
+          "averageWaitingTime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Averagewaitingtime"
+          },
+          "meanWaitingTime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meanwaitingtime"
+          },
+          "maxWaitingTime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxwaitingtime"
+          },
+          "queueLength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queuelength"
+          },
+          "acqUtilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acqutilization"
+          },
+          "networkUtilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Networkutilization"
+          },
+          "aiUtilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aiutilization"
+          },
+          "revUtilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revutilization"
+          },
+          "reviewerUtilization": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewerutilization"
+          },
+          "bottleneck": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bottleneck"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario"
+        ],
+        "title": "ScenarioResult"
+      },
+      "SimulationCapacityResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimulationRunPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SimulationRunInfo"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "target": {
+            "$ref": "#/components/schemas/CapacityTarget"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "target"
+        ],
+        "title": "SimulationCapacityResponse"
+      },
+      "SimulationRunInfo": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "generatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generatedat"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "SimulationRunInfo"
+      },
+      "SimulationRunPayload": {
+        "properties": {
+          "generatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generatedat"
+          },
+          "matlabVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matlabversion"
+          },
+          "simulinkVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulinkversion"
+          },
+          "simEventsVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simeventsversion"
+          },
+          "modelFile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelfile"
+          },
+          "dataSourcePolicy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datasourcepolicy"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "title": "SimulationRunPayload"
+      },
+      "UserInfo": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "name",
+          "role"
+        ],
+        "title": "UserInfo"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1045,13 +1733,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",
@@ -1061,6 +1742,12 @@
           "type"
         ],
         "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }

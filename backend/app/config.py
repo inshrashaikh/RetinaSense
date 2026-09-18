@@ -27,6 +27,15 @@ ARTIFACTS_DIR = DATA_DIR / "artifacts"
 REPORTS_DIR = DATA_DIR / "reports"
 MODELS_DIR = REPOSITORY_ROOT / "data" / "models"
 
+# District-scale capacity model (simulink/)
+SIMULINK_DIR = REPOSITORY_ROOT / "simulink"
+SIMULATION_OUTPUT_DIR = SIMULINK_DIR / "output"
+
+# 100k/yr scalability target (SIH 2026 problem statement). Reference only —
+# never claimed as measured; the simulation reports actual throughput.
+SIM_TARGET_ANNUAL_PATIENTS = 100_000
+SIM_WORKDAYS_PER_YEAR = 365  # matches simulink/scenario_params.m (274/day ≈ 100k/365)
+
 # SQLite database
 DATABASE_PATH = Path(
     os.environ.get("RETINASENSE_DATABASE_PATH", str(DATA_DIR / "retinasense.db"))

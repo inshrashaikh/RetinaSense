@@ -143,6 +143,63 @@ class HealthResponse(BaseModel):
     database: str = "ok"
 
 
+# ---------- Simulink capacity model (simulink/run_simulink_scenarios.m) ----------
+# Mirrors the persisted JSON payload (persist_results_json). Every measured
+# field comes from real SimEvents block statistics; null fields are never
+# interpreted as a value.
+
+class ScenarioResult(BaseModel):
+    scenario: str
+    executionStatus: str | None = None
+    measurementWindow: str | None = None
+    patientsPerDay: float | None = None
+    bandwidthMbps: float | None = None
+    numReviewers: float | None = None
+    simTimeHours: float | None = None
+    completedPatients: float | None = None
+    throughput: float | None = None
+    annualCapacity: float | None = None
+    averageWaitingTime: float | None = None
+    meanWaitingTime: float | None = None
+    maxWaitingTime: float | None = None
+    queueLength: float | None = None
+    acqUtilization: float | None = None
+    networkUtilization: float | None = None
+    aiUtilization: float | None = None
+    revUtilization: float | None = None
+    reviewerUtilization: float | None = None
+    bottleneck: str | None = None
+
+
+class SimulationRunPayload(BaseModel):
+    generatedAt: str | None = None
+    matlabVersion: str | None = None
+    simulinkVersion: str | None = None
+    simEventsVersion: str | None = None
+    modelFile: str | None = None
+    dataSourcePolicy: str | None = None
+    results: list[ScenarioResult] = Field(default_factory=list)
+
+
+class SimulationRunInfo(BaseModel):
+    file: str
+    generatedAt: str | None = None
+    results: list[ScenarioResult] = Field(default_factory=list)
+
+
+class CapacityTarget(BaseModel):
+    annualPatients: int
+    dailyEquivalent: float
+    note: str
+
+
+class SimulationCapacityResponse(BaseModel):
+    available: bool
+    latest: SimulationRunPayload | None = None
+    runs: list[SimulationRunInfo] = Field(default_factory=list)
+    target: CapacityTarget
+
+
 class ErrorResponse(BaseModel):
     error: dict[str, str]
 

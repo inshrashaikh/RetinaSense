@@ -19,6 +19,7 @@ import type {
   ReportResponse,
   ReviewRequest,
   ReviewResponse,
+  SimulationCapacityResponse,
   UserInfo,
 } from './types';
 
@@ -109,6 +110,14 @@ export async function fetchHealth(): Promise<HealthResponse> {
 export async function fetchCaseStats(): Promise<CaseStats> {
   if (isDemoMode) return demo.fetchCaseStats();
   return apiRequest<CaseStats>('/api/cases/stats', { timeoutMs: 10_000 });
+}
+
+/** Measured district-capacity simulation results (admin-only endpoint). */
+export async function fetchSimulationCapacity(): Promise<SimulationCapacityResponse> {
+  if (isDemoMode) return demo.fetchSimulationCapacity();
+  return apiRequest<SimulationCapacityResponse>('/api/simulation/capacity', {
+    timeoutMs: 15_000,
+  });
 }
 
 export async function generateReport(caseId: string): Promise<ReportResponse> {
