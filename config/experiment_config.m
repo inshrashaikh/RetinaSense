@@ -40,7 +40,7 @@ function cfg = experiment_config()
 
     % ---- Explainability ----
     cfg.explainability = struct( ...
-        'layers',      '', ...   % e.g. 'activation_40_relu' (set post-benchmark)
+        'layers',      '', ...   % selected from the benchmarked backbone below
         'note',        'Model attention - not proof of causality', ...
         'colormap',    'jet');
 
@@ -78,6 +78,13 @@ function cfg = experiment_config()
                                    % artifact presence/validity enforced at load time
 
     cfg.model = loadModelRecord(cfg.model);   % reads data/models/backbone_benchmark.json
+
+    % The shipped MATLAB ResNet-50 artifact is a dlnetwork whose final
+    % convolutional feature layer is L4_2_relu3. Keep Grad-CAM tied to the
+    % same benchmark-selected backbone and its actual layer names.
+    if cfg.model.available && isfield(cfg.classification.train.featureLayerName, cfg.model.backbone)
+        cfg.explainability.layers = cfg.classification.train.featureLayerName.(cfg.model.backbone);
+    end
 end
 
 function model = loadModelRecord(model)

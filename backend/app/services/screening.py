@@ -221,6 +221,8 @@ def run_screening(
             "gradCamPath": explain_data.get("gradCamPath"),
             "evidenceAvailable": explain_data.get("evidenceAvailable", False),
             "evidencePath": explain_data.get("evidencePath"),
+            "attentionImage": explain_data.get("attentionImage"),
+            "evidenceOverlay": explain_data.get("evidenceOverlay"),
         }
     else:
         screening["explainability"] = {
@@ -235,7 +237,7 @@ def run_screening(
     # fallback: when the model/torch is unavailable the block stays empty —
     # attention is never fabricated. Analysis is advisory and non-blocking.
     if screening["status"] == "completed":
-        _attach_real_explainability(case_id, img_path, screening)
+        _attach_real_explainability(case_id, screening)
 
     # The explainability block must be self-consistent: a path set means the
     # artifact is actually served; `available` is only true when the artifact
@@ -253,30 +255,26 @@ def run_screening(
 
 def _attach_real_explainability(
     case_id: str,
-    img_path: Path,
     screening: dict[str, Any],
 ) -> None:
     """Compute and persist genuine Grad-CAM/evidence artifacts for a case.
 
-    Runs the real PyTorch Grad-CAM on the stored fundus image, persists the
-    overlays under data/artifacts/<caseId>/, and points the explainability
-    block at the served API paths. Failure leaves the block empty (advisory,
-    non-blocking) — it must never fabricate attention.
+    Persists the actual MATLAB runPipeline overlays under
+    data/artifacts/<caseId>/ and points the explainability block at the served
+    API paths. Failure leaves the block empty (advisory, non-blocking) — it
+    must never fabricate attention or run a second model.
     """
     try:
-        from ..config import EXPLAIN_ENABLED
         from ..services.artifacts import save_explain_artifacts
-        from ..services.explainability import compute_explain
-
-        if not EXPLAIN_ENABLED:
-            return
-        result = compute_explain(img_path)
-        if result is None:
+        explain = screening.get("explainability") or {}
+        attention = explain.pop("attentionImage", None)
+        evidence = explain.pop("evidenceOverlay", None)
+        if attention is None and evidence is None:
             return
         refs = save_explain_artifacts(
             case_id,
-            attention=result["attentionImage"],
-            evidence=result["evidenceOverlay"],
+            attention=attention,
+            evidence=evidence,
         )
         screening["explainability"] = {
             "gradCamAvailable": refs.get("gradcam") is not None,

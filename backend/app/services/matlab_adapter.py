@@ -246,6 +246,8 @@ class MatlabAdapter(BaseMatlabAdapter):
                 "evidenceAvailable": bool(explain.get("evidenceOverlay") is not None),
                 "evidencePath": None,
                 "note": explain.get("note"),
+                "attentionImage": explain.get("attentionImage"),
+                "evidenceOverlay": explain.get("evidenceOverlay"),
             }
 
         return result
@@ -357,14 +359,33 @@ def default_adapter() -> BaseMatlabAdapter:
 # MATLAB <-> Python value conversion helpers
 # --------------------------------------------------------------------------
 
-def _to_py(value: Any) -> Any:
+def _to_py(value: Any, *, preserve_array: bool = False) -> Any:
     """Shallow-to-deep conversion from matlab.engine return values to python."""
     if hasattr(value, "_fieldnames"):  # matlab struct -> dict
-        return {name: _to_py(getattr(value, name)) for name in value._fieldnames()}
+        return {
+            name: _to_py(
+                getattr(value, name),
+                preserve_array=name in {"gradCam", "attentionImage", "evidenceOverlay"},
+            )
+            for name in value._fieldnames()
+        }
     if isinstance(value, dict):        # nested python dict (sub-struct)
-        return {k: _to_py(v) for k, v in value.items()}
+        return {
+            k: _to_py(
+                v,
+                preserve_array=k in {"gradCam", "attentionImage", "evidenceOverlay"},
+            )
+            for k, v in value.items()
+        }
     if isinstance(value, (list, tuple)):
         return [_to_py(v) for v in value]
+    if preserve_array and hasattr(value, "size") and not isinstance(value, (str, bytes)):
+        try:
+            import numpy as np
+
+            return np.asarray(value).tolist()
+        except (TypeError, ValueError):
+            return value
     if hasattr(value, "size") and isinstance(value, object) and not isinstance(value, (str, bytes)):
         # matlab.double / matlab.logical array
         try:

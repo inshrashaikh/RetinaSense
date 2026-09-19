@@ -100,7 +100,7 @@ function scoreMap = runGradCAM(net, image, grading, params)
     % Class index to explain: the graded class (referable decision class).
     label = grading.grade + 1;
     if ~isempty(params.layers) && isLayerValid(net, params.layers)
-        scoreMap = gradCAM(net, im, label, params.layers);
+        scoreMap = gradCAM(net, im, label, 'FeatureLayer', params.layers);
     else
         scoreMap = gradCAM(net, im, label);
     end

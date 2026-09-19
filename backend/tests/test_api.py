@@ -861,6 +861,38 @@ def test_artifact_available_returns_png():
     assert resp.content
 
 
+def test_artifact_writer_accepts_matlab_style_array_lists():
+    import numpy as np
+
+    from app.services import artifacts
+
+    case_id = _create_case()
+    attention = np.zeros((4, 4, 3), dtype=np.uint8).tolist()
+    attention[0][0] = [255, 20, 10]
+    refs = artifacts.save_explain_artifacts(case_id, attention=attention, evidence=None)
+
+    assert refs["gradcam"] == f"/api/cases/{case_id}/artifacts/gradcam"
+    resp = client.get(f"/api/cases/{case_id}/artifacts/gradcam")
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_evidence_artifact_writer_accepts_matlab_style_array_lists():
+    import numpy as np
+
+    from app.services import artifacts
+
+    case_id = _create_case()
+    evidence = np.zeros((4, 4, 3), dtype=np.uint8).tolist()
+    evidence[0][0] = [255, 20, 10]
+    refs = artifacts.save_explain_artifacts(case_id, attention=None, evidence=evidence)
+
+    assert refs["evidence"] == f"/api/cases/{case_id}/artifacts/evidence"
+    resp = client.get(f"/api/cases/{case_id}/artifacts/evidence")
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
 # ─── 29. PDF report download ─────────────────────────────────────────────
 # Regression: the report-pdf endpoint must never 500 (reportlab present,
 # missing data yields a structured 404) and must serve a real PDF download.

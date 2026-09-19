@@ -49,7 +49,10 @@ def _artifacts_dir(case_id: str) -> Path:
 def _write_png(case_id: str, name: str, arr: Any) -> Path:
     dest = _artifacts_dir(case_id) / f"{name}.png"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(arr, mode="RGB").save(dest, format="PNG")
+    image_array = np.asarray(arr)
+    if image_array.dtype != np.uint8:
+        image_array = np.clip(image_array, 0, 255).astype(np.uint8)
+    Image.fromarray(image_array, mode="RGB").save(dest, format="PNG")
     return dest
 
 
@@ -58,11 +61,7 @@ def _pixel_count(arr: Any) -> int:
     if arr is None:
         return 0
     try:
-        if isinstance(arr, np.ndarray):
-            return int(arr.size)
-        size = arr.size
-        dims = tuple(size()) if callable(size) else tuple(size)
-        return int(np.prod(dims)) if dims else 0
+        return int(np.asarray(arr).size)
     except Exception:
         return 0
 
@@ -102,7 +101,14 @@ def has_visible_markers(rgb: Any) -> bool:
     """
     if _pixel_count(rgb) == 0:
         return False
-    return bool((rgb[..., 0] != rgb[..., 2]).any() or (rgb[..., 1] != rgb[..., 2]).any())
+    try:
+        image_array = np.asarray(rgb)
+        return bool(
+            (image_array[..., 0] != image_array[..., 2]).any()
+            or (image_array[..., 1] != image_array[..., 2]).any()
+        )
+    except (IndexError, TypeError, ValueError):
+        return False
 
 
 def save_explain_artifacts(
