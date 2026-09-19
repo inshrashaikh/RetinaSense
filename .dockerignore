@@ -1,0 +1,39 @@
+.git
+.gitignore
+
+# Build/install caches
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+backend/myenv/
+backend/.env
+frontend/.env
+
+# Runtime data (fresh, on a named volume)
+backend/data/
+
+# MATLAB-only / repo-level source not needed in the container.
+# Without MATLAB installed the backend fails closed (MATLAB_ENGINE_UNAVAILABLE),
+# so these directories only add build-context weight.
+data/
+dataset/
+output/
+analysis/
+calibration/
+classification/
+core/
+database/
+evaluation/
+explainability/
+preprocessing/
+reporting/
+scripts/
+simulink/
+tools/
+ui/
+assets/
+docs/
+
+*.log

@@ -7,6 +7,11 @@ pytest==8.4.1
 httpx==0.28.1
 sqlalchemy==2.0.52
 
+# Postgres driver for the docker-compose "db" service
+# (RETINASENSE_DATABASE_URL=postgresql+psycopg://...). SQLite remains the
+# no-server default.
+psycopg[binary]==3.3.6
+
 matplotlib==3.11.2
 reportlab==5.0.1
 numpy==2.3.5

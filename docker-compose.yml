@@ -1,0 +1,85 @@
+# RetinaSense full-stack stack: frontend (nginx/SPA) + backend (FastAPI) + db
+# (Postgres). Each tier is accessible from the host on its own port:
+#
+#   http://localhost:8080  -> frontend UI (proxies /api to the backend)
+#   http://localhost:8000  -> backend API + /docs (FastAPI docs)
+#   localhost:5432         -> Postgres (user/password/db below)
+#
+# Run:
+#   docker compose build
+#   docker compose up -d
+#
+# Demo logins: operator/operator123, doctor/doctor123, admin/admin123.
+# Screening: MATLAB is not runnable in this container (its Python engine is
+# Windows-only and licence-gated), so the real path fails closed with an honest
+# MATLAB_ENGINE_UNAVAILABLE error unless you point RETINASENSE_SIMULATION=mock
+# at the clearly-labelled demo adapter.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-retinasense}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-retinasense-dev-password}
+      POSTGRES_DB: ${POSTGRES_DB:-retinasense}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-retinasense} -d ${POSTGRES_DB:-retinasense}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    image: retinasense-backend:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      RETINASENSE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-retinasense}:${POSTGRES_PASSWORD:-retinasense-dev-password}@db:5432/${POSTGRES_DB:-retinasense}
+      # Prototype only: set a real random secret for any shared deployment
+      # (python -c "import secrets; print(secrets.token_hex(32))").
+      RETINASENSE_TOKEN_SECRET: ${RETINASENSE_TOKEN_SECRET:-retinasense-compose-dev-secret-do-not-use-in-prod}
+      # off -> real adapter (fails closed, MATLAB not in this container).
+      # mock -> clearly-labelled SIMULATED screening adapter (demo only).
+      RETINASENSE_SIMULATION: ${RETINASENSE_SIMULATION:-off}
+    ports:
+      - "8000:8000"
+    volumes:
+      - app-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    image: retinasense-frontend:latest
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_PROXY_TARGET: backend
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  db-data:
+  app-data:

@@ -36,10 +36,16 @@ SIMULATION_OUTPUT_DIR = SIMULINK_DIR / "output"
 SIM_TARGET_ANNUAL_PATIENTS = 100_000
 SIM_WORKDAYS_PER_YEAR = 365  # matches simulink/scenario_params.m (274/day ≈ 100k/365)
 
-# SQLite database
+# Database
+# Default: SQLite file (prototype / local dev, no server needed).
+# Optional: RETINASENSE_DATABASE_URL switches to an external database (e.g.
+# `postgresql+psycopg://user:pass@host:5432/retinasense` in the docker-compose
+# stack). When set it takes precedence over the SQLite path — same schema,
+# driven entirely by config, no code path assumes one engine or the other.
 DATABASE_PATH = Path(
     os.environ.get("RETINASENSE_DATABASE_PATH", str(DATA_DIR / "retinasense.db"))
 ).resolve()
+DATABASE_URL = os.environ.get("RETINASENSE_DATABASE_URL") or None
 
 # CORS — the app authenticates with bearer tokens (never cookies), so any
 # origin may call the API once it HAS a token. Default is therefore to allow

@@ -1,10 +1,13 @@
 """SQLAlchemy engine / session helpers for the RetinaSense database.
 
-The database file lives at config.DATABASE_PATH (backend/data/retinasense.db)
-unless configured otherwise (tests point it at a temp dir).
+By default the database is a SQLite file at config.DATABASE_PATH
+(backend/data/retinasense.db); set config.DATABASE_URL
+(RETINASENSE_DATABASE_URL) to use an external engine instead (e.g. Postgres
+in the docker-compose stack). Tests point it at a temp dir.
 """
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Optional
@@ -29,23 +32,40 @@ def _set_sqlite_pragma(dbapi_connection, connection_record) -> None:
     cursor.close()
 
 
-def configure_database(path: Optional[Path] = None) -> None:
-    """Point the app at a SQLite database file and prepare a session factory.
+def configure_database(
+    path: Optional[Path] = None,
+    url: Optional[str] = None,
+) -> None:
+    """Point the app at a database and prepare a session factory.
 
-    Safe to call more than once (replaces the engine and session factory).
+    Resolution order:
+      1. `url` argument (tests / external callers).
+      2. ``RETINASENSE_DATABASE_URL`` env var — an external engine such as
+         Postgres in the docker-compose stack.
+      3. `path` argument, else config.DATABASE_PATH — the SQLite fallback.
+
+    SQLite gets per-connection tweaks (thread flag + FK pragma); external
+    engines are used as configured. Safe to call more than once (replaces the
+    engine and session factory).
     """
     global _engine, _SessionLocal
-    from ..config import DATABASE_PATH
 
-    db_path = Path(path) if path is not None else DATABASE_PATH
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connect_url = url or os.environ.get("RETINASENSE_DATABASE_URL")
+    if connect_url is None:
+        from ..config import DATABASE_PATH
 
-    _engine = create_engine(
-        _sqlite_url(db_path),
-        connect_args={"check_same_thread": False},
-        pool_pre_ping=True,
-    )
-    event.listen(_engine, "connect", _set_sqlite_pragma)
+        db_path = Path(path) if path is not None else DATABASE_PATH
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        connect_url = _sqlite_url(db_path)
+
+    engine_kwargs: dict = {"pool_pre_ping": True}
+    if connect_url.startswith("sqlite"):
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+    is_sqlite = connect_url.startswith("sqlite")
+    _engine = create_engine(connect_url, **engine_kwargs)
+    if is_sqlite:
+        event.listen(_engine, "connect", _set_sqlite_pragma)
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False)
 
 

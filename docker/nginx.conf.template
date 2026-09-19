@@ -1,0 +1,40 @@
+# RetinaSense nginx config template.
+# `${BACKEND_PROXY_TARGET}` is substituted at container start:
+#   127.0.0.1  -> all-in-one image (backend runs in the same container)
+#   backend    -> compose frontend service (backend is its own container)
+# Serves the built SPA and forwards /api (plus FastAPI docs) to uvicorn.
+
+server {
+  listen 80;
+  server_name _;
+
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # The backend enforces a 20 MB image cap; leave headroom for multipart.
+  client_max_body_size 25m;
+
+  location /api/ {
+    proxy_pass http://${BACKEND_PROXY_TARGET}:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 120s;
+    proxy_request_buffering off;
+  }
+
+  # FastAPI interactive docs / OpenAPI schema (developer convenience).
+  location /docs {
+    proxy_pass http://${BACKEND_PROXY_TARGET}:8000;
+  }
+
+  location /openapi.json {
+    proxy_pass http://${BACKEND_PROXY_TARGET}:8000;
+  }
+
+  location / {
+    # The app uses a hash router, but keep a safe SPA fallback for probe
+    # requests and deep links.
+    try_files $uri $uri/ /index.html;
+  }
+}
