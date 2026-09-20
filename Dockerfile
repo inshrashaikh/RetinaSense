@@ -76,9 +76,12 @@ FROM python:3.12-slim AS backend
 COPY --from=backend-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=backend-deps /usr/local/bin /usr/local/bin
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
- && rm -rf /var/lib/apt/lists/*
+# Copy system libraries (libgl1, libglib2.0-0 and their transitive deps)
+# from the backend-deps stage instead of re-running apt-get, which avoids
+# a second 50 MB download and sidesteps disk-space constraints on the host.
+COPY --from=backend-deps /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
+COPY --from=backend-deps /usr/share/glvnd /usr/share/glvnd
+COPY --from=backend-deps /lib/x86_64-linux-gnu /lib/x86_64-linux-gnu
 
 WORKDIR /app
 
