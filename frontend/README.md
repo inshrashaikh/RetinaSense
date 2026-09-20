@@ -54,16 +54,20 @@ shell). Everything else renders inside the application shell.
 | Route | Screen |
 |---|---|
 | `#/` | Public landing page (hero, stats, workflow, technology, features, human-in-the-loop, safety, CTA) |
-| `#/dashboard` | Clinical console (stats, workflow overview, recent cases, worklists) |
+| `#/login` | Standalone sign-in (seeded roles) |
+| `#/dashboard` | Role-aware clinical console — operator (capture-only), doctor (AI briefs + review), district capacity |
 | `#/screening` | New screening (metadata + image upload, runs the pipeline) |
 | `#/cases/new` | Register a case, then continue to upload |
 | `#/case/:id` | Full screening record (quality, AI result, review, final decision, report) |
 | `#/case/:id/upload` | Attach the fundus image to an existing case and screen it |
 | `#/result` | Latest result (most recent case) |
 | `#/cases` | Case list with search + status filter |
-| `#/review` | Review queue (screened, awaiting a human decision) |
+| `#/review` | Review queue (screened, awaiting a human decision; ophthalmologist/admin only) |
 | `#/reports` | Report listing |
 | `#/reports/:id` | Report detail (printable) |
+
+Non-DEMO routing requires an authenticated session; `/review` additionally
+requires the `ophthalmologist` or `admin` role and redirects otherwise.
 
 Landing-page section links (`#how-it-works`, `#technology`, `#features`,
 `#safety`, …) are real anchors, not routes: the router resolves any hash that
@@ -89,14 +93,20 @@ colour, type, spacing, radii, shadows and motion, plus one component layer
 Endpoints called from `src/api/endpoints.ts`:
 
 - `GET  /api/health` → `{status, matlabEngine, version, database?}`
+- `POST /api/auth/login` → `{token, role, ...}`
+- `GET  /api/auth/me` → current user info
 - `POST /api/cases` → `{caseId, status}` (201)
 - `POST /api/cases/{caseId}/screen` (multipart `image` + `patientId`/`eye`/`phcId`) → `CaseResponse`
 - `GET  /api/cases/{caseId}` → `CaseResponse`
 - `GET  /api/cases` → `CaseListItem[]`
 - `GET  /api/cases/stats` → `CaseStats`
 - `GET  /api/cases/{caseId}/image` → image blob
+- `GET  /api/cases/{caseId}/artifacts/{name}` → explainability artifact blob
 - `POST /api/cases/{caseId}/review` (JSON `{action, reviewerId, overrideGrade?, finalReferral?, notes?}`) → `ReviewResponse`
-- `GET` / `POST /api/cases/{caseId}/report` → `ReportResponse`
+- `POST /api/cases/{caseId}/report` → `ReportResponse` (generate)
+- `GET  /api/cases/{caseId}/report` → `ReportResponse`
+- `GET  /api/cases/{caseId}/report/pdf` → PDF blob
+- `GET  /api/simulation/capacity` → district capacity model results
 
 Errors are normalised to `ApiError {kind, code, message}` and mapped to
 friendly, honest UI messages (e.g. 503 `MATLAB_ENGINE_UNAVAILABLE` →
@@ -108,14 +118,18 @@ friendly, honest UI messages (e.g. 503 `MATLAB_ENGINE_UNAVAILABLE` →
 src/
   api/          types.ts (backend schema mirrors), client.ts (HTTP + errors),
                 endpoints.ts (API or DEMO), demo.ts (clearly-labelled fixtures)
+  auth/         session.ts (login state, role helpers like canReview)
   utils/        validation.ts (client image guard), format.ts, errors.ts
-  hooks/        useCaseList.ts (case list loading/error/reload)
+  hooks/        useCaseList.ts, useCaseBriefs.ts, useSimulationCapacity.ts,
+                useStats.ts (API loading/error/reload)
   components/   AppShell, shared panels (Quality/AiPrediction/Explainability/
                 FinalDecision/Review/Report/ImagePreview), ui/ primitives,
                 landing/ sections, DashboardStats/DashboardCases
-  pages/        LandingPage, DashboardPage, NewScreeningPage, CreateCasePage,
-                CaseUploadPage, CasesPage, CaseViewPage, LatestResultPage,
-                ReviewQueuePage, ReportsPage, ReportDetailPage, NotFoundPage
+  pages/        LandingPage, LoginPage, DashboardPage + role dashboards (in
+                pages/dashboards/: Operator/Doctor/Simulation/ScreeningConsole),
+                NewScreeningPage, CreateCasePage, CaseUploadPage, CasesPage,
+                CaseViewPage, LatestResultPage, ReviewQueuePage, ReportsPage,
+                ReportDetailPage, NotFoundPage
   router.ts     hash router (+ dynamic path parsers)
 ```
 
@@ -126,6 +140,11 @@ gate result, the **immutable AI prediction**, explainability (real backend
 artifacts only — nothing is drawn or invented), the human review, and the
 final decision. An ungradable image shows recapture instructions and **no**
 grade, report, or review — nothing is fabricated.
+
+The dashboard dispatches to a role-specific view: **Operator** sees a
+capture-only console, **Doctor** sees AI briefs and review work, **Simulation**
+shows the measured district-capacity model results (real backend numbers, or
+an honest empty state when the endpoint is unavailable — never fabricated).
 
 ### Landing hero
 

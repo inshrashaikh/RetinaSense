@@ -38,9 +38,14 @@ bounded validation run succeeds.
 | dataset | status | purpose | manifests |
 |---------|--------|---------|-----------|
 | APTOS 2019 | AVAILABLE + NOT YET VALIDATED | DR classifier train/val/test | `aptos_manifest.csv`, `folds.csv` (canonical split) |
-| IDRiD | AVAILABLE + NOT YET VALIDATED | DR grade + lesion + optic-disc/fovea validation (external-only) | `idrid_manifest.csv` (+ grading/segmentation/localization) |
+| IDRiD | AVAILABLE + STRUCTURE VALIDATED + COMPONENT VALIDATED (bounded) | DR grade + lesion + optic-disc/fovea validation (external-only) | `idrid_manifest.csv` (+ grading/segmentation/localization) |
 | DRIVE | NOT AVAILABLE (loader prepared) | vessel-segmentation validation | `drive_manifest.csv` (empty) |
 | Messidor-2 | NOT AVAILABLE (loader prepared) | external DR validation (external-only split) | `messidor2_manifest.csv` (empty) |
+
+The registry above mirrors the committed `dataset_status.csv`; see also
+`tools/python_verifier/dataset_check.py`, which reports what is actually on
+disk (APTOS + IDRiD pass; DRIVE/Messidor-2 present as NOT AVAILABLE — expected,
+not corruption).
 
 ## IDRiD layout actually on disk (`data/raw/IDRiD/`, gitignored)
 
@@ -75,9 +80,10 @@ paths (no machine-specific absolute paths):
   exceeds the 597 unique photographs; do not treat the two counts as equal.
 
 IDRiD is a VALIDATION dataset for RetinaSense: `prepareClassifierData` only
-reads `folds.csv` (APTOS), so IDRiD never joins APTOS training. Status
-"AVAILABLE + NOT YET VALIDATED" means files physically load and the bounded
-validator passes; NO clinical or model validation has been performed.
+reads `folds.csv` (APTOS), so IDRiD never joins APTOS training. Its registry
+status ("STRUCTURE VALIDATED + COMPONENT VALIDATED (bounded)") means the files
+physically load and the bounded validator passes; NO clinical or model
+validation has been performed.
 
 ## Adding a real dataset (official sources only)
 
